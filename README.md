@@ -215,3 +215,16 @@ PING 192.168.11.102 (192.168.11.102) 56(84) bytes of data.
 5 packets transmitted, 5 received, 0% packet loss, time 4030ms
 rtt min/avg/max/mdev = 0.860/1.009/1.466/0.229 ms
 ```
+
+## 3. zenoh-picoの導入と動作確認
+
+### 準備
+
+`west update` でモジュールを取得
+
+```bash
+### zephyr_env
+cd ${ZEPHYR_WS_ROOT}
+
+west update zenoh-pico
+```
