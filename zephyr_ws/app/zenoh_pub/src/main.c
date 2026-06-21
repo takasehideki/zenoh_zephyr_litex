@@ -41,7 +41,7 @@ static int wait_for_ipv4(void) {
 
     if (addr != NULL) {
       printf("IPv4 address is ready: %s\n",
-             net_addr_ntop(AF_INET, addr, addr_buf, sizeof(addr_buf)));
+             net_addr_ntop(NET_AF_INET, addr, addr_buf, sizeof(addr_buf)));
       return 0;
     }
 
