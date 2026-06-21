@@ -9,3 +9,4 @@ manifest:
 
   self:
     path: manifest
+    import: submanifests/zenoh-pico.yaml
