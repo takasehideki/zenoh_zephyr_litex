@@ -1,3 +1,10 @@
 # LiteX: Keep litex_ws/ directory itself, but ignore everything inside it
 /litex_ws/*
 !/litex_ws/.gitkeep
+
+# Zephyr: Ignore venv, Zephyr SDK, and build directories
+/zephyr_ws/zephyr_env/
+/zephyr_ws/.west/
+/zephyr_ws/zephyr/
+/zephyr_ws/toolchains/
+/zephyr_ws/build/
