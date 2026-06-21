@@ -215,3 +215,48 @@ PING 192.168.11.102 (192.168.11.102) 56(84) bytes of data.
 5 packets transmitted, 5 received, 0% packet loss, time 4030ms
 rtt min/avg/max/mdev = 0.860/1.009/1.466/0.229 ms
 ```
+
+## 3. zenoh-picoの導入と動作確認
+
+### 準備
+
+`west update` でモジュールを取得
+
+```bash
+### zephyr_env
+cd ${ZEPHYR_WS_ROOT}
+
+west update zenoh-pico
+```
+
+### ビルドと動作確認
+
+ビルドする．
+
+```bash
+### zephyr_env
+cd ${ZEPHYR_WS_ROOT}/zephyr
+
+west build -p always \
+  -b litex_vexriscv \
+  samples/net/dhcpv4_client \
+  -d ${ZEPHYR_WS_ROOT}/build/dhcp_litex \
+  -- \
+  -DDTC_OVERLAY_FILE=${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/overlay.dts
+```
+
+LiteX の venv で SoC image 書込 && serial boot していく．
+
+```bash
+### litex_env
+cd ${LITEX_WS_ROOT}/fpga_image/arty_a7_100
+python3 -m litex_boards.targets.digilent_arty \
+  --variant a7-100 \
+  --output-dir build \
+  --load
+
+litex_term /dev/ttyUSB1 \
+  --speed 115200 \
+  --kernel ${ZEPHYR_WS_ROOT}/build/dhcp_litex/zephyr/zephyr.bin
+```
+
