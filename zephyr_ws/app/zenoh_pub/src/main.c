@@ -17,21 +17,12 @@
 #include <unistd.h>
 #include <zenoh-pico.h>
 
-#define CLIENT_OR_PEER 0  // 0: Client mode; 1: Peer mode
-#if CLIENT_OR_PEER == 0
 #define MODE "client"
 #define LOCATOR ""  // If empty, it will scout
-#elif CLIENT_OR_PEER == 1
-#define MODE "peer"
-#define LOCATOR "udp/224.0.0.225:7447#iface=en0"
-#else
-#error "Unknown Zenoh operation mode. Check CLIENT_OR_PEER value."
-#endif
 
 #define KEYEXPR "demo/example/zenoh-pico-pub"
-#define VALUE "[STSTM32]{nucleo-F767ZI} Pub from Zenoh-Pico!"
+#define VALUE "Pub from Zenoh-Pico!"
 
-#if Z_FEATURE_PUBLICATION == 1
 int main(int argc, char** argv) {
   sleep(5);
 
@@ -91,11 +82,3 @@ int main(int argc, char** argv) {
 
   return 0;
 }
-#else
-int main(void) {
-  printf(
-      "ERROR: Zenoh pico was compiled without Z_FEATURE_PUBLICATION but this "
-      "example requires it.\n");
-  return -2;
-}
-#endif
