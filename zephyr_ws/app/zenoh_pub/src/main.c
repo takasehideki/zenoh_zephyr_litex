@@ -32,68 +32,70 @@
 #define VALUE "[STSTM32]{nucleo-F767ZI} Pub from Zenoh-Pico!"
 
 #if Z_FEATURE_PUBLICATION == 1
-int main(int argc, char **argv) {
-    sleep(5);
+int main(int argc, char** argv) {
+  sleep(5);
 
-    // Initialize Zenoh Session and other parameters
-    z_owned_config_t config;
-    z_config_default(&config);
-    zp_config_insert(z_loan_mut(config), Z_CONFIG_MODE_KEY, MODE);
-    if (strcmp(LOCATOR, "") != 0) {
-        if (strcmp(MODE, "client") == 0) {
-            zp_config_insert(z_loan_mut(config), Z_CONFIG_CONNECT_KEY, LOCATOR);
-        } else {
-            zp_config_insert(z_loan_mut(config), Z_CONFIG_LISTEN_KEY, LOCATOR);
-        }
+  // Initialize Zenoh Session and other parameters
+  z_owned_config_t config;
+  z_config_default(&config);
+  zp_config_insert(z_loan_mut(config), Z_CONFIG_MODE_KEY, MODE);
+  if (strcmp(LOCATOR, "") != 0) {
+    if (strcmp(MODE, "client") == 0) {
+      zp_config_insert(z_loan_mut(config), Z_CONFIG_CONNECT_KEY, LOCATOR);
+    } else {
+      zp_config_insert(z_loan_mut(config), Z_CONFIG_LISTEN_KEY, LOCATOR);
     }
+  }
 
-    // Open Zenoh session
-    printf("Opening Zenoh Session...");
-    z_owned_session_t s;
-    if (z_open(&s, z_move(config), NULL) < 0) {
-        printf("Unable to open session!\n");
-        return -1;
-    }
-    printf("OK\n");
+  // Open Zenoh session
+  printf("Opening Zenoh Session...");
+  z_owned_session_t s;
+  if (z_open(&s, z_move(config), NULL) < 0) {
+    printf("Unable to open session!\n");
+    return -1;
+  }
+  printf("OK\n");
 
-    // Start the receive and the session lease loop for zenoh-pico
-    zp_start_read_task(z_loan_mut(s), NULL);
-    zp_start_lease_task(z_loan_mut(s), NULL);
+  // Start the receive and the session lease loop for zenoh-pico
+  zp_start_read_task(z_loan_mut(s), NULL);
+  zp_start_lease_task(z_loan_mut(s), NULL);
 
-    printf("Declaring publisher for '%s'...", KEYEXPR);
-    z_view_keyexpr_t ke;
-    z_view_keyexpr_from_str_unchecked(&ke, KEYEXPR);
-    z_owned_publisher_t pub;
-    if (z_declare_publisher(z_loan(s), &pub, z_loan(ke), NULL) < 0) {
-        printf("Unable to declare publisher for key expression!\n");
-        return -1;
-    }
-    printf("OK\n");
+  printf("Declaring publisher for '%s'...", KEYEXPR);
+  z_view_keyexpr_t ke;
+  z_view_keyexpr_from_str_unchecked(&ke, KEYEXPR);
+  z_owned_publisher_t pub;
+  if (z_declare_publisher(z_loan(s), &pub, z_loan(ke), NULL) < 0) {
+    printf("Unable to declare publisher for key expression!\n");
+    return -1;
+  }
+  printf("OK\n");
 
-    char buf[256];
-    for (int idx = 0; 1; ++idx) {
-        sleep(1);
-        sprintf(buf, "[%4d] %s", idx, VALUE);
-        printf("Putting Data ('%s': '%s')...\n", KEYEXPR, buf);
+  char buf[256];
+  for (int idx = 0; 1; ++idx) {
+    sleep(1);
+    sprintf(buf, "[%4d] %s", idx, VALUE);
+    printf("Putting Data ('%s': '%s')...\n", KEYEXPR, buf);
 
-        // Create payload
-        z_owned_bytes_t payload;
-        z_bytes_copy_from_str(&payload, buf);
+    // Create payload
+    z_owned_bytes_t payload;
+    z_bytes_copy_from_str(&payload, buf);
 
-        z_publisher_put(z_loan(pub), z_move(payload), NULL);
-    }
+    z_publisher_put(z_loan(pub), z_move(payload), NULL);
+  }
 
-    printf("Closing Zenoh Session...");
-    z_drop(z_move(pub));
+  printf("Closing Zenoh Session...");
+  z_drop(z_move(pub));
 
-    z_drop(z_move(s));
-    printf("OK!\n");
+  z_drop(z_move(s));
+  printf("OK!\n");
 
-    return 0;
+  return 0;
 }
 #else
 int main(void) {
-    printf("ERROR: Zenoh pico was compiled without Z_FEATURE_PUBLICATION but this example requires it.\n");
-    return -2;
+  printf(
+      "ERROR: Zenoh pico was compiled without Z_FEATURE_PUBLICATION but this "
+      "example requires it.\n");
+  return -2;
 }
 #endif

@@ -228,3 +228,35 @@ cd ${ZEPHYR_WS_ROOT}
 
 west update zenoh-pico
 ```
+
+### ビルドと動作確認
+
+ビルドする．
+
+```bash
+### zephyr_env
+cd ${ZEPHYR_WS_ROOT}/zephyr
+
+west build -p always \
+  -b litex_vexriscv \
+  samples/net/dhcpv4_client \
+  -d ${ZEPHYR_WS_ROOT}/build/dhcp_litex \
+  -- \
+  -DDTC_OVERLAY_FILE=${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/overlay.dts
+```
+
+LiteX の venv で SoC image 書込 && serial boot していく．
+
+```bash
+### litex_env
+cd ${LITEX_WS_ROOT}/fpga_image/arty_a7_100
+python3 -m litex_boards.targets.digilent_arty \
+  --variant a7-100 \
+  --output-dir build \
+  --load
+
+litex_term /dev/ttyUSB1 \
+  --speed 115200 \
+  --kernel ${ZEPHYR_WS_ROOT}/build/dhcp_litex/zephyr/zephyr.bin
+```
+
