@@ -18,7 +18,10 @@
 #include <zenoh-pico.h>
 
 #define MODE "client"
-#define LOCATOR ""  // If empty, it will scout
+#ifndef ZENOH_LOCATOR
+#define ZENOH_LOCATOR ""
+#endif
+#define LOCATOR ZENOH_LOCATOR
 
 #define KEYEXPR "demo/example/zenoh-pico-pub"
 #define VALUE "Pub from Zenoh-Pico!"
@@ -32,6 +35,7 @@ int main(int argc, char** argv) {
   zp_config_insert(z_loan_mut(config), Z_CONFIG_MODE_KEY, MODE);
   if (strcmp(LOCATOR, "") != 0) {
     if (strcmp(MODE, "client") == 0) {
+      printf("Using Zenoh locator from compile-time env: %s\n", LOCATOR);
       zp_config_insert(z_loan_mut(config), Z_CONFIG_CONNECT_KEY, LOCATOR);
     } else {
       zp_config_insert(z_loan_mut(config), Z_CONFIG_LISTEN_KEY, LOCATOR);

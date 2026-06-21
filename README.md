@@ -231,16 +231,18 @@ west update zenoh-pico
 
 ### ビルドと動作確認
 
-ビルドする．
+下記の例のようにホストPCのIPアドレスを環境変数 `ZENOH_LOCATOR` に設定してビルドする．
 
 ```bash
 ### zephyr_env
-cd ${ZEPHYR_WS_ROOT}/zephyr
+cd ${ZEPHYR_WS_ROOT}
+
+export ZENOH_LOCATOR="tcp/192.168.11.105:7447"
 
 west build -p always \
   -b litex_vexriscv \
-  samples/net/dhcpv4_client \
-  -d ${ZEPHYR_WS_ROOT}/build/dhcp_litex \
+  app/zenoh_pub \
+  -d ${ZEPHYR_WS_ROOT}/build/zenoh_pub \
   -- \
   -DDTC_OVERLAY_FILE=${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/overlay.dts
 ```
@@ -257,6 +259,6 @@ python3 -m litex_boards.targets.digilent_arty \
 
 litex_term /dev/ttyUSB1 \
   --speed 115200 \
-  --kernel ${ZEPHYR_WS_ROOT}/build/dhcp_litex/zephyr/zephyr.bin
+  --kernel ${ZEPHYR_WS_ROOT}/build/zenoh_pub/zephyr/zephyr.bin
 ```
 
