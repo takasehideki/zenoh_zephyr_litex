@@ -143,3 +143,75 @@ Executing booted program at 0x40000000
 *** Booting Zephyr OS build v4.4.0 ***
 Hello World! litex_vexriscv/litex_vexriscv
 ```
+
+### ネットワーク疎通の確認
+
+次は samples/net/dhcpv4_client でボードとのネットワーク疎通がシュッといくかを確認してみる．
+このビルドは Zephyr の venv で(ry
+
+```bash
+### zephyr_env
+cd ${ZEPHYR_WS_ROOT}/zephyr
+
+west build -p always \
+  -b litex_vexriscv \
+  samples/net/dhcpv4_client \
+  -d ${ZEPHYR_WS_ROOT}/build/dhcp_litex \
+  -- \
+  -DDTC_OVERLAY_FILE=${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/overlay.dts
+```
+
+host <-> board は直結ではなくルータ経由でのEthernet接続とする．
+LiteX の venv で SoC image 書込 && serial boot していく．
+
+```bash
+### litex_env
+cd ${LITEX_WS_ROOT}/fpga_image/arty_a7_100
+python3 -m litex_boards.targets.digilent_arty \
+  --variant a7-100 \
+  --output-dir build \
+  --load
+
+litex_term /dev/ttyUSB1 \
+  --speed 115200 \
+  --kernel ${ZEPHYR_WS_ROOT}/build/dhcp_litex/zephyr/zephyr.bin
+```
+
+こうなっていればだいたい良さそう
+
+```bash
+[LITEX-TERM] Upload complete (10.9KB/s).
+[LITEX-TERM] Booting the device.
+[LITEX-TERM] Done.
+Executing booted program at 0x40000000
+
+--============== Liftoff! ==============--
+
+[00:00:00.060,000] <inf> phy_mii: PHY (1) ID 20005C90
+*** Booting Zephyr OS build v4.4.0 ***
+[00:00:00.060,000] <inf> net_dhcpv4_client_sample: Run dhcpv4 client
+[00:00:00.060,000] <inf> net_dhcpv4_client_sample: Start on ethernet@e0009800: index=1
+[00:00:01.820,000] <inf> phy_mii: PHY (1) Link speed 100 Mb, full duplex
+[00:00:03.860,000] <inf> net_dhcpv4: Received: 192.168.11.102
+[00:00:03.860,000] <inf> net_dhcpv4_client_sample:    Address[1]: 192.168.11.102
+[00:00:03.860,000] <inf> net_dhcpv4_client_sample:     Subnet[1]: 255.255.255.0
+[00:00:03.860,000] <inf> net_dhcpv4_client_sample:     Router[1]: 192.168.11.1
+[00:00:03.860,000] <inf> net_dhcpv4_client_sample: Lease time[1]: 86400 seconds
+uart:~$ 
+```
+
+念のため host の別ターミナルから `ping` してみる．よきよき．
+
+```bash
+$ ping 192.168.11.102 
+PING 192.168.11.102 (192.168.11.102) 56(84) bytes of data.
+64 bytes from 192.168.11.102: icmp_seq=1 ttl=64 time=1.47 ms
+64 bytes from 192.168.11.102: icmp_seq=2 ttl=64 time=0.895 ms
+64 bytes from 192.168.11.102: icmp_seq=3 ttl=64 time=0.860 ms
+64 bytes from 192.168.11.102: icmp_seq=4 ttl=64 time=0.913 ms
+64 bytes from 192.168.11.102: icmp_seq=5 ttl=64 time=0.911 ms
+^C
+--- 192.168.11.102 ping statistics ---
+5 packets transmitted, 5 received, 0% packet loss, time 4030ms
+rtt min/avg/max/mdev = 0.860/1.009/1.466/0.229 ms
+```
