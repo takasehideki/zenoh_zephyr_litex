@@ -1,21 +1,16 @@
-//
-// Copyright (c) 2022 ZettaScale Technology
-//
-// This program and the accompanying materials are made available under the
-// terms of the Eclipse Public License 2.0 which is available at
-// http://www.eclipse.org/legal/epl-2.0, or the Apache License, Version 2.0
-// which is available at https://www.apache.org/licenses/LICENSE-2.0.
-//
-// SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
-//
-// Contributors:
-//   ZettaScale Zenoh Team, <zenoh@zettascale.tech>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <zenoh-pico.h>
+#include <zephyr/kernel.h>
+
+/* Keep this forward declaration before dhcpv4.h so include sorting does not
+ * break type identity. */
+struct net_if;
+
+#include <zephyr/net/dhcpv4.h>
+#include <zephyr/net/net_if.h>
+#include <zephyr/net/net_ip.h>
 
 #define MODE "client"
 #ifndef ZENOH_LOCATOR
@@ -26,8 +21,38 @@
 #define KEYEXPR "demo/example/zenoh-pico-pub"
 #define VALUE "Pub from Zenoh-Pico!"
 
-int main(int argc, char** argv) {
-  sleep(5);
+static int wait_for_ipv4(void) {
+  struct net_if* iface = net_if_get_default();
+  char addr_buf[NET_IPV4_ADDR_LEN];
+
+  printf("Waiting for IPv4 address via DHCP...\n");
+
+  if (iface == NULL) {
+    printf("ERROR: no default network interface\n");
+    return -1;
+  }
+
+  net_if_up(iface);
+  net_dhcpv4_start(iface);
+
+  while (1) {
+    struct net_in_addr* addr =
+        net_if_ipv4_get_global_addr(iface, NET_ADDR_PREFERRED);
+
+    if (addr != NULL) {
+      printf("IPv4 address is ready: %s\n",
+             net_addr_ntop(AF_INET, addr, addr_buf, sizeof(addr_buf)));
+      return 0;
+    }
+
+    k_sleep(K_SECONDS(1));
+  }
+}
+
+int main(void) {
+  if (wait_for_ipv4() != 0) {
+    return -1;
+  }
 
   // Initialize Zenoh Session and other parameters
   z_owned_config_t config;
@@ -67,7 +92,7 @@ int main(int argc, char** argv) {
 
   char buf[256];
   for (int idx = 0; 1; ++idx) {
-    sleep(1);
+    k_sleep(K_SECONDS(1));
     sprintf(buf, "[%4d] %s", idx, VALUE);
     printf("Putting Data ('%s': '%s')...\n", KEYEXPR, buf);
 
