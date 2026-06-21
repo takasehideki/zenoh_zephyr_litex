@@ -1,0 +1,3 @@
+# LiteX: Keep litex_ws/ directory itself, but ignore everything inside it
+/litex_ws/*
+!/litex_ws/.gitkeep
