@@ -12,6 +12,9 @@ export LITEX_WS_ROOT=${REPO_ROOT}/litex_ws
 export ZEPHYR_WS_ROOT=${REPO_ROOT}/zephyr_ws
 ```
 
+LiteX or Zephyr向けのvenv環境が設定されたターミナルでは冒頭に `### litex_env` or `### zephyr_env` と記載する．
+
+
 ## 1. LiteXでのカスタムSoCの生成
 
 [Vivado Design Tools 2025.1](https://www.amd.com/en/support/downloads/adaptive-socs-and-fpgas/development-tools/2025-1.html) はインストール済みであるとする．
@@ -19,6 +22,7 @@ export ZEPHYR_WS_ROOT=${REPO_ROOT}/zephyr_ws
 下記のコマンドを実行し，LiteX向けvenv環境の作成，LiteX環境の導入，SoCイメージのビルド，FPGA（Arty A7-100T）への書き込みを行っていく．
 
 ```bash
+### litex_env
 python3 -m venv ${LITEX_WS_ROOT}/litex_env
 source ${LITEX_WS_ROOT}/litex_env/bin/activate
 
@@ -60,6 +64,7 @@ python3 -m litex_boards.targets.digilent_arty \
 manifest は Zephyr v4.4.0 本体だけ，toolchain も `riscv64-zephyr-elf` のみをインストールしている．
 
 ```bash
+### zephyr_env
 sudo apt install --no-install-recommends git cmake ninja-build gperf \
   ccache dfu-util device-tree-compiler wget python3-dev python3-venv python3-tk \
   xz-utils file make gcc gcc-multilib g++-multilib libsdl2-dev libmagic1
@@ -81,4 +86,60 @@ cd ${ZEPHYR_WS_ROOT}/zephyr
 west sdk install \
   --install-dir ${ZEPHYR_WS_ROOT}/toolchains/zephyr-sdk \
   --gnu-toolchains riscv64-zephyr-elf
+```
+
+### samples/hello_world のビルドと実行
+
+まずは Hello, World!!
+
+LiteX 向けの venv で下記を実行し，カスタムSoCに対応した Zephyr Overlay を作成する．
+
+```bash
+### litex_env
+cd ${LITEX_WS_ROOT}/fpga_image/arty_a7_100/
+
+python3 ${LITEX_WS_ROOT}/litex_setup/litex/litex/tools/litex_json2dts_zephyr.py \
+  --dts build/overlay.dts \
+  --config build/overlay.config \
+  build/csr.json
+```
+
+samples/hello_world をビルドする．
+今度は Zephyr 向けの venv で実行する．
+
+```bash
+### zephyr_env
+cd ${ZEPHYR_WS_ROOT}/zephyr
+
+west build -p always \
+  -b litex_vexriscv \
+  samples/hello_world \
+  -d ${ZEPHYR_WS_ROOT}/build/hello_litex \
+  -- \
+  -DDTC_OVERLAY_FILE=${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/overlay.dts
+```
+
+今度は LiteX 用の(ry で，念のため FPGA イメージを書き直してから Zephyr をアプリごと serial boot する
+
+```bash
+### litex_env
+cd ${LITEX_WS_ROOT}/fpga_image/arty_a7_100
+python3 -m litex_boards.targets.digilent_arty \
+  --variant a7-100 \
+  --output-dir build \
+  --load
+
+litex_term /dev/ttyUSB1 \
+  --speed 115200 \
+  --kernel ${ZEPHYR_WS_ROOT}/build/hello_litex/zephyr/zephyr.bin
+```
+
+最後にこんな表示が出てきたらOK
+
+```bash
+Executing booted program at 0x40000000
+
+--============== Liftoff! ==============--
+*** Booting Zephyr OS build v4.4.0 ***
+Hello World! litex_vexriscv/litex_vexriscv
 ```
