@@ -69,6 +69,7 @@ source ${ZEPHYR_WS_ROOT}/zephyr_env/bin/activate
 
 pip install west
 
+cd ${ZEPHYR_WS_ROOT}
 west init -l manifest
 west update zephyr
 west zephyr-export
