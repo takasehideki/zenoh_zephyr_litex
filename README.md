@@ -177,6 +177,35 @@ Info : JTAG tap: xc7.tap tap/device found: 0x13631093 (mfg: 0x049 (Xilinx), part
 ```
 
 SoCイメージの書き込みはFPGAボードの再起動(電源投入)ごとに必要となる．
+これが煩わしければ [openFPGALoader](https://trabucayre.github.io/openFPGALoader/) を使って configuration flash に bitstream を書き込むのもあり．
+
+```bash
+### litex_venv
+sudo apt install openfpgaloader
+
+openFPGALoader -b arty_a7_100t -f \
+  ${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/gateware/digilent_arty.bit
+```
+
+こんな感じの出力になればOK
+
+```bash
+empty
+write to flash
+Jtag frequency : requested 10.00MHz  -> real 10.00MHz 
+Open file DONE
+Parse file DONE
+use: /usr/share/openFPGALoader/spiOverJtag_xc7a100tcsg324.bit.gz
+load program
+Load SRAM: [==================================================] 100.00%
+Done
+Detected: spansion S25FL128S 256 sectors size: 128Mb
+00000000 00000000 00000000 00
+Erasing: [==================================================] 100.00%
+Done
+Writing: [===================================================] 100.00%
+Done
+```
 
 ## 2. Zephyrの準備と動作確認
 
