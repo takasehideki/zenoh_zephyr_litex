@@ -1,11 +1,18 @@
+# general settings
+/.vscode/
+
 # LiteX: Keep litex_ws/ directory itself, but ignore everything inside it
 /litex_ws/*
 !/litex_ws/.gitkeep
 
-# Zephyr: Ignore venv, Zephyr SDK, and build directories
-/zephyr_ws/zephyr_env/
+# Zephyr: Ignore venv, Zephyr SDK, build dir, etc.
+/zephyr_ws/zephyr_venv/
 /zephyr_ws/.west/
 /zephyr_ws/zephyr/
 /zephyr_ws/toolchains/
 /zephyr_ws/build/
 /zephyr_ws/modules/
+
+# Zenoh: Ignore venv, zenohd binary, etc.
+/zenoh_ws/zenoh_venv/
+/zenoh_ws/zenohd/
