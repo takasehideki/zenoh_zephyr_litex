@@ -628,6 +628,7 @@ python3 r_sub.py
 
 - [zephyr_ws/app/ros2_pub](zephyr_ws/app/ros2_pub)
 - [zephyr_ws/app/ros2_sub](zephyr_ws/app/ros2_sub)
+- [zephyr_ws/app/ros2_twist_pub](zephyr_ws/app/ros2_twist_pub)
 - [zephyr_ws/app/common/src/rmw_zenoh_compat.c](zephyr_ws/app/common/src/rmw_zenoh_compat.c): 共通処理
   - Zenoh payload <-> ROS 2 topic のシリアライズ
   - rmw_zenoh 互換の keyexpr / liveliness / attachment / encoding /gid 生成
@@ -703,4 +704,45 @@ ros2 run demo_nodes_py talker
 litex_term /dev/ttyUSB1 \
   --speed 115200 \
   --kernel ${ZEPHYR_WS_ROOT}/build/ros2_sub/zephyr/zephyr.bin
+```
+
+### turtlesim の操作
+
+`geometry_msgs/msg/Twist` を `/turtle1/cmd_vel` へ publish することで，zenoh-pico から turtlesim を操作する．試作実装は [zephyr_ws/app/ros2_twist_pub](zephyr_ws/app/ros2_twist_pub) に置いている．現時点では `linear.x = 1.0`, `angular.z = 0.6` の固定値を 100 ms 周期で publish する．
+
+```bash
+### zephyr_venv
+cd ${ZEPHYR_WS_ROOT}
+
+export ZENOH_LOCATOR="tcp/192.168.11.105:7447"
+
+west build -p always \
+  -b litex_vexriscv \
+  app/ros2_twist_pub \
+  -d ${ZEPHYR_WS_ROOT}/build/ros2_twist_pub \
+  -- \
+  -DDTC_OVERLAY_FILE=${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/overlay.dts
+```
+
+１つめのターミナルでは `rmw_zenoh` の router を起動する．
+
+```bash
+### ros2_env
+ros2 run rmw_zenoh_cpp rmw_zenohd
+```
+
+２つめのターミナルでは turtlesim を起動する．
+
+```bash
+### ros2_env
+ros2 run turtlesim turtlesim_node
+```
+
+３つめでは LiteX の venv で serial boot する．
+
+```bash
+### litex_venv
+litex_term /dev/ttyUSB1 \
+  --speed 115200 \
+  --kernel ${ZEPHYR_WS_ROOT}/build/ros2_twist_pub/zephyr/zephyr.bin
 ```
