@@ -32,8 +32,10 @@ static void data_handler(z_loaned_sample_t* sample, void* arg) {
 }
 
 int main(void) {
-  if (dhcpv4_wait_for_ipv4() != 0) {
-    return -1;
+  int rc = dhcpv4_wait_for_ipv4();
+  if (rc != 0) {
+    LOG_ERR("DHCPv4 failed (%d)", rc);
+    return rc;
   }
 
   z_owned_config_t config;

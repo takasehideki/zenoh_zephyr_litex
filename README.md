@@ -296,7 +296,7 @@ pip install eclipse-zenoh==1.8.0
 
 ### ビルド
 
-下記の例のようにホストPCのIPアドレスを環境変数 `ZENOH_LOCATOR` に設定してビルドする．
+下記の例のようにホストPCのIPアドレスを環境変数 `ZENOH_LOCATOR` に設定し，pub,sub 両方のアプリをビルドする．
 
 ```bash
 ### zephyr_env
@@ -308,6 +308,13 @@ west build -p always \
   -b litex_vexriscv \
   app/zenoh_pub \
   -d ${ZEPHYR_WS_ROOT}/build/zenoh_pub \
+  -- \
+  -DDTC_OVERLAY_FILE=${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/overlay.dts
+
+west build -p always \
+  -b litex_vexriscv \
+  app/zenoh_sub \
+  -d ${ZEPHYR_WS_ROOT}/build/zenoh_sub \
   -- \
   -DDTC_OVERLAY_FILE=${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/overlay.dts
 ```

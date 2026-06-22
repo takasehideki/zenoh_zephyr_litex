@@ -19,8 +19,10 @@ LOG_MODULE_REGISTER(app, CONFIG_LOG_DEFAULT_LEVEL);
 #define VALUE "Pub from Zenoh-Pico!"
 
 int main(void) {
-  if (dhcpv4_wait_for_ipv4() != 0) {
-    return -1;
+  int rc = dhcpv4_wait_for_ipv4();
+  if (rc != 0) {
+    LOG_ERR("DHCPv4 failed (%d)", rc);
+    return rc;
   }
 
   // Initialize Zenoh Session and other parameters
@@ -62,7 +64,7 @@ int main(void) {
   char buf[256];
   for (int idx = 0; 1; ++idx) {
     k_sleep(K_SECONDS(1));
-    sprintf(buf, "[%4d] %s", idx, VALUE);
+    snprintk(buf, sizeof(buf), "[%4d] %s", idx, VALUE);
     LOG_INF("Putting Data ('%s': '%s')...", KEYEXPR, buf);
 
     // Create payload
