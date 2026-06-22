@@ -425,7 +425,7 @@ pip install eclipse-zenoh==1.8.0
 
 ### ビルド
 
-下記の例のようにホストPCのIPアドレスを環境変数 `ZENOH_LOCATOR` に設定し，pub,sub 両方のアプリをビルドする．
+下記の例のようにホストPCのIPアドレスを環境変数 `ZENOH_LOCATOR` に設定し，それぞれのアプリをビルドする．
 
 ```bash
 ### zephyr_venv
@@ -444,6 +444,13 @@ west build -p always \
   -b litex_vexriscv \
   app/zenoh_sub \
   -d ${ZEPHYR_WS_ROOT}/build/zenoh_sub \
+  -- \
+  -DDTC_OVERLAY_FILE=${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/overlay.dts
+
+west build -p always \
+  -b litex_vexriscv \
+  app/zenoh_pubsub \
+  -d ${ZEPHYR_WS_ROOT}/build/zenoh_pubsub \
   -- \
   -DDTC_OVERLAY_FILE=${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/overlay.dts
 ```
@@ -506,4 +513,32 @@ python3 z_pub.py
 litex_term /dev/ttyUSB1 \
   --speed 115200 \
   --kernel ${ZEPHYR_WS_ROOT}/build/zenoh_sub/zephyr/zephyr.bin
+```
+
+#### target board Pub/Sub <-> host laptop Pub/Sub
+
+１つめでは `zenohd` を起動する．
+
+```bash
+cd ${REPO_ROOT}/zenoh_ws/zenohd
+
+./zenohd
+```
+
+２つめでは [z_pubsub.py](zenoh_ws/z_pubsub.py) を実行する．
+
+```bash
+### zenoh_venv
+cd ${REPO_ROOT}/zenoh_ws
+
+python3 z_pubsub.py
+```
+
+３つめでは LiteX の venv で serial boot する．
+
+```bash
+### litex_venv
+litex_term /dev/ttyUSB1 \
+  --speed 115200 \
+  --kernel ${ZEPHYR_WS_ROOT}/build/zenoh_pubsub/zephyr/zephyr.bin
 ```
