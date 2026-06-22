@@ -5,7 +5,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
-#include "net_utils.h"
+#include "ipv4_dhcp_client.h"
 
 LOG_MODULE_REGISTER(app, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -19,7 +19,7 @@ LOG_MODULE_REGISTER(app, CONFIG_LOG_DEFAULT_LEVEL);
 #define VALUE "Pub from Zenoh-Pico!"
 
 int main(void) {
-  if (wait_for_ipv4() != 0) {
+  if (dhcpv4_wait_for_ipv4() != 0) {
     return -1;
   }
 

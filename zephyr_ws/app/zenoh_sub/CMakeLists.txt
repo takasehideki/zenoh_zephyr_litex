@@ -4,7 +4,7 @@ project(zenoh_sub)
 
 file(GLOB app_sources src/*.c)
 set(common_sources ${CMAKE_CURRENT_SOURCE_DIR}/../common/src/atomic_shim.c
-                   ${CMAKE_CURRENT_SOURCE_DIR}/../common/src/net_utils.c)
+                   ${CMAKE_CURRENT_SOURCE_DIR}/../common/src/ipv4_dhcp_client.c)
 target_sources(app PRIVATE ${app_sources} ${common_sources})
 target_include_directories(
   app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../common/include)
