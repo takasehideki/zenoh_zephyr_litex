@@ -1,0 +1,17 @@
+cmake_minimum_required(VERSION 3.20.0)
+find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
+project(ros2_pub)
+
+file(GLOB app_sources src/*.c)
+set(common_sources
+    ${CMAKE_CURRENT_SOURCE_DIR}/../common/src/atomic_shim.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../common/src/ipv4_dhcp_client.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../common/src/rmw_zenoh_compat.c)
+target_sources(app PRIVATE ${app_sources} ${common_sources})
+target_include_directories(
+  app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../common/include)
+
+if(DEFINED ENV{ZENOH_LOCATOR} AND NOT "$ENV{ZENOH_LOCATOR}" STREQUAL "")
+  target_compile_definitions(app PRIVATE ZENOH_LOCATOR=\"$ENV{ZENOH_LOCATOR}\")
+  message(STATUS "ros2_pub: ZENOH_LOCATOR is set from environment")
+endif()
