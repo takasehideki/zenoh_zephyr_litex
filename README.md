@@ -249,3 +249,95 @@ PING 192.168.11.102 (192.168.11.102) 56(84) bytes of data.
 5 packets transmitted, 5 received, 0% packet loss, time 4030ms
 rtt min/avg/max/mdev = 0.860/1.009/1.466/0.229 ms
 ```
+
+## 3. zenoh-picoの導入と動作確認
+
+### 準備
+
+Zephyr 向けの zenoh-pico のモジュールを取得する設定は [zephyr_ws/manifest/submanifests/zenoh-pico.yaml](zephyr_ws/manifest/submanifests/zenoh-pico.yaml) に記述してある．
+
+`west update` でこのモジュールを取得する．
+
+```bash
+### zephyr_env
+cd ${ZEPHYR_WS_ROOT}
+
+west update zenoh-pico
+```
+
+ホストに Zenoh router (zenohd) の standalone binary をインストールする．
+
+```bash
+mkdir ${REPO_ROOT}/zenoh_ws/zenohd && cd ${REPO_ROOT}/zenoh_ws/zenohd
+wget https://github.com/eclipse-zenoh/zenoh/releases/download/1.8.0/zenoh-1.8.0-x86_64-unknown-linux-gnu-standalone.zip
+unzip zenoh-1.8.0-x86_64-unknown-linux-gnu-standalone.zip
+```
+
+こんなのが展開されていればよい．
+
+```bash
+$ ls
+libzenoh_plugin_rest.so
+libzenoh_plugin_storage_manager.so
+zenoh-1.8.0-x86_64-unknown-linux-gnu-standalone.zip
+zenohd
+```
+
+ホストでの Zenoh 通信確認用には [zenoh-python](https://github.com/eclipse-zenoh/zenoh-python) を使用する．
+
+```bash
+### zenoh_venv
+cd ${REPO_ROOT}/zenoh_ws
+python3 -m venv zenoh_venv
+source zenoh_venv/bin/activate
+
+pip install eclipse-zenoh==1.8.0
+```
+
+### ビルド
+
+下記の例のようにホストPCのIPアドレスを環境変数 `ZENOH_LOCATOR` に設定してビルドする．
+
+```bash
+### zephyr_env
+cd ${ZEPHYR_WS_ROOT}
+
+export ZENOH_LOCATOR="tcp/192.168.11.105:7447"
+
+west build -p always \
+  -b litex_vexriscv \
+  app/zenoh_pub \
+  -d ${ZEPHYR_WS_ROOT}/build/zenoh_pub \
+  -- \
+  -DDTC_OVERLAY_FILE=${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/overlay.dts
+```
+
+### 動作確認
+
+ターミナルを３つ開く．
+
+１つめでは `zenohd` を起動する．
+
+```bash
+cd ${REPO_ROOT}/zenoh_ws/zenohd
+
+./zenohd
+```
+
+２つめでは zenoh-python 実装の Subscriber である [z_sub.py](zenoh_ws/z_sub.py) を実行する．
+
+```bash
+### zenoh_venv
+cd ${REPO_ROOT}/zenoh_ws
+
+python3 z_sub.py
+```
+
+３つめでは LiteX の venv で serial boot する．
+
+```bash
+### litex_venv
+litex_term /dev/ttyUSB1 \
+  --speed 115200 \
+  --kernel ${ZEPHYR_WS_ROOT}/build/zenoh_pub/zephyr/zephyr.bin
+```
