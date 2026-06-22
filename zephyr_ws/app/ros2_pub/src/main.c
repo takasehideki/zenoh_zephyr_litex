@@ -58,8 +58,10 @@ int main(void) {
   char pub_lv[512];
   if (rmw_zenoh_build_node_liveliness(node_lv, sizeof(node_lv), session_zid,
                                       NODE_ID, NODE_NAME) < 0 ||
-      rmw_zenoh_build_pub_liveliness(pub_lv, sizeof(pub_lv), session_zid,
-                                     NODE_ID, PUB_ID, NODE_NAME) < 0) {
+      rmw_zenoh_build_pub_liveliness(
+          pub_lv, sizeof(pub_lv), session_zid, NODE_ID, PUB_ID, NODE_NAME,
+          RMW_ZENOH_STRING_TOPIC, RMW_ZENOH_STRING_TYPE_NAME,
+          RMW_ZENOH_STRING_TYPE_HASH) < 0) {
     LOG_ERR("Unable to build rmw_zenoh liveliness keyexprs");
     return -1;
   }

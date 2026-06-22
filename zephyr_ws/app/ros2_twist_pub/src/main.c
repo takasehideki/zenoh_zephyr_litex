@@ -65,7 +65,7 @@ int main(void) {
   char pub_lv[512];
   if (rmw_zenoh_build_node_liveliness(node_lv, sizeof(node_lv), session_zid,
                                       NODE_ID, NODE_NAME) < 0 ||
-      rmw_zenoh_build_pub_liveliness_for_topic(
+      rmw_zenoh_build_pub_liveliness(
           pub_lv, sizeof(pub_lv), session_zid, NODE_ID, PUB_ID, NODE_NAME,
           RMW_ZENOH_TWIST_TOPIC, RMW_ZENOH_TWIST_TYPE_NAME,
           RMW_ZENOH_TWIST_TYPE_HASH) < 0) {

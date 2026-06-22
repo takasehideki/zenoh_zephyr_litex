@@ -37,18 +37,14 @@ int rmw_zenoh_build_node_liveliness(char* buf, size_t buf_len,
                                     const char* node_name);
 int rmw_zenoh_build_pub_liveliness(char* buf, size_t buf_len,
                                    const char* session_zid, int node_id,
-                                   int pub_id, const char* node_name);
-int rmw_zenoh_build_pub_liveliness_for_topic(
-    char* buf, size_t buf_len, const char* session_zid, int node_id, int pub_id,
-    const char* node_name, const char* topic, const char* type_name,
-    const char* type_hash);
+                                   int pub_id, const char* node_name,
+                                   const char* topic, const char* type_name,
+                                   const char* type_hash);
 int rmw_zenoh_build_sub_liveliness(char* buf, size_t buf_len,
                                    const char* session_zid, int node_id,
-                                   int sub_id, const char* node_name);
-int rmw_zenoh_build_sub_liveliness_for_topic(
-    char* buf, size_t buf_len, const char* session_zid, int node_id, int sub_id,
-    const char* node_name, const char* topic, const char* type_name,
-    const char* type_hash);
+                                   int sub_id, const char* node_name,
+                                   const char* topic, const char* type_name,
+                                   const char* type_hash);
 int rmw_zenoh_declare_liveliness_token(const z_loaned_session_t* session,
                                        const char* keyexpr,
                                        z_owned_liveliness_token_t* token);

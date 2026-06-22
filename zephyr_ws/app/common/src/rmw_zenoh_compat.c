@@ -91,17 +91,9 @@ int rmw_zenoh_build_node_liveliness(char* buf, size_t buf_len,
 
 int rmw_zenoh_build_pub_liveliness(char* buf, size_t buf_len,
                                    const char* session_zid, int node_id,
-                                   int pub_id, const char* node_name) {
-  return rmw_zenoh_build_pub_liveliness_for_topic(
-      buf, buf_len, session_zid, node_id, pub_id, node_name,
-      RMW_ZENOH_STRING_TOPIC, RMW_ZENOH_STRING_TYPE_NAME,
-      RMW_ZENOH_STRING_TYPE_HASH);
-}
-
-int rmw_zenoh_build_pub_liveliness_for_topic(
-    char* buf, size_t buf_len, const char* session_zid, int node_id, int pub_id,
-    const char* node_name, const char* topic, const char* type_name,
-    const char* type_hash) {
+                                   int pub_id, const char* node_name,
+                                   const char* topic, const char* type_name,
+                                   const char* type_hash) {
   char topic_key[128];
   if (build_liveliness_topic(topic_key, sizeof(topic_key), topic) < 0) {
     return -ENOMEM;
@@ -116,17 +108,9 @@ int rmw_zenoh_build_pub_liveliness_for_topic(
 
 int rmw_zenoh_build_sub_liveliness(char* buf, size_t buf_len,
                                    const char* session_zid, int node_id,
-                                   int sub_id, const char* node_name) {
-  return rmw_zenoh_build_sub_liveliness_for_topic(
-      buf, buf_len, session_zid, node_id, sub_id, node_name,
-      RMW_ZENOH_STRING_TOPIC, RMW_ZENOH_STRING_TYPE_NAME,
-      RMW_ZENOH_STRING_TYPE_HASH);
-}
-
-int rmw_zenoh_build_sub_liveliness_for_topic(
-    char* buf, size_t buf_len, const char* session_zid, int node_id, int sub_id,
-    const char* node_name, const char* topic, const char* type_name,
-    const char* type_hash) {
+                                   int sub_id, const char* node_name,
+                                   const char* topic, const char* type_name,
+                                   const char* type_hash) {
   char topic_key[128];
   if (build_liveliness_topic(topic_key, sizeof(topic_key), topic) < 0) {
     return -ENOMEM;
