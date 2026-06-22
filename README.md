@@ -32,9 +32,63 @@ export ZEPHYR_WS_ROOT=${REPO_ROOT}/zephyr_ws
 
 さらに，LiteX, Zephyr, Zenoh向けのvenv環境が設定されたターミナルでは冒頭に `### litex_venv` `### zephyr_venv` `### zenoh_venv` とそれぞれ記載する．
 
-## 1. LiteXでのカスタムSoCの生成
-
 [Vivado Design Tools 2025.1](https://www.amd.com/en/support/downloads/adaptive-socs-and-fpgas/development-tools/2025-1.html) はインストール済みであるとする．
+
+<details>
+
+<summary>Tips: Vivado インストールの詳細</summary>
+
+下記からインストーラをダウンロード
+> AMD Unified Installer for FPGAs & Adaptive SoCs 2025.1: Linux Self Extracting Web Installer
+
+https://www.amd.com/en/support/downloads/adaptive-socs-and-fpgas/development-tools/2025-1.html
+
+実行権限を与えて，デフォルトインストール先の `/tools/Xilinx` を作成して，インストーラを実行
+
+```bash
+cd ~/Downloads
+chmod +x FPGAs_AdaptiveSoCs_Unified_SDI_2025.1_0530_0145_Lin64.bin
+sudo mkdir -p /tools/Xilinx
+sudo chown -R "$USER:$USER" /tools/Xilinx
+./FPGAs_AdaptiveSoCs_Unified_SDI_2025.1_0530_0145_Lin64.bin
+```
+
+次のように選択していく
+
+- A Newer Version is Available のポップアップ: Continue
+- Select Install Type: Download and Install Now
+- Select Product to Install: Vivado
+- Select Edition to Install: Vivado ML Standard
+- Vivado ML Standard: Devices -> 7 Series -> Artix-7 FPGAs のみ選択
+- Accept License Agreements: I Agree to all checkboxes
+- Select Destination Directory: default
+- Installation Summary: Install
+
+完了後に出てくるポップアップには素直に従う
+
+```bash
+sudo /tools/Xilinx/2025.1/Vivado/scripts/installLibs.sh 
+```
+
+ご丁寧に（勝手に）ログを生成してくれるので削除
+
+```bash
+rm installLibs.sh_*
+```
+
+License Manager はとりあえず閉じておく（Standard なら無料で使えたはず,,,
+
+パスを通して動作確認．いったん GUI が立ち上がったら満足しておく（また（勝手に）作成されるログも後片付け）
+
+```bash
+source /tools/Xilinx/2025.1/Vivado/settings64.sh 
+vivado
+rm vivado.*
+```
+
+</details>
+
+## 1. LiteXでのカスタムSoCの生成
 
 下記のコマンドを実行し，LiteX向けvenv環境の作成，LiteX環境の導入，SoCイメージのビルドを行っていく．
 
@@ -79,7 +133,6 @@ INFO: [Common 17-206] Exiting Vivado at Sun Jun 21 13:01:04 2026...
 ```
 
 Arty A7 board をPCとUSB接続して，下記のコマンドでSoCイメージを書き込む．
-この操作はFPGAボードの再起動ごとに必要となる．
 
 ```bash
 ### litex_venv
@@ -91,20 +144,45 @@ python3 -m litex_boards.targets.digilent_arty \
   --load
 ```
 
+<details>
+
+<summary>Tips: FPGA 書き込みのための環境設定</summary>
+
+OpenOCD と udev rule が必要な場合は下記の通り設定する．
+
+```bash
+sudo apt install openocd
+
+sudo tee /etc/udev/rules.d/99-digilent-ftdi.rules >/dev/null <<'EOF'
+SUBSYSTEM=="usb", ATTR{idVendor}=="0403", ATTR{idProduct}=="6010", MODE="0666", GROUP="plugdev", TAG+="uaccess"
+EOF
+
+sudo groupadd -f plugdev
+sudo usermod -aG plugdev,dialout $USER
+
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+</details>
+
 最後にこんな感じのが出たらOKのはず
 
 ```bash
+### litex_venv
 fpga_program
 Info : ftdi: if you experience problems at higher adapter clocks, try the command "ftdi tdo_sample_edge falling"
 Info : clock speed 25000 kHz
 Info : JTAG tap: xc7.tap tap/device found: 0x13631093 (mfg: 0x049 (Xilinx), part: 0x3631, ver: 0x1)
 ```
 
+SoCイメージの書き込みはFPGAボードの再起動(電源投入)ごとに必要となる．
+
 ## 2. Zephyrの準備と動作確認
 
 ### 環境準備
 
-上記の `litex_venv` とは異なるターミナルを開き，必要なパッケージとZephyr用向けvenv環境の作成，Zephyrのインストールを実行する．
+ここまでの `litex_venv` とは異なるターミナルを開き，必要なパッケージとZephyr用向けvenv環境の作成，Zephyrのインストールを実行する．
 
 manifest は Zephyr v4.4.0 本体だけ，toolchain も `riscv64-zephyr-elf` のみをインストールしている．
 
@@ -164,6 +242,17 @@ west build -p always \
   -DDTC_OVERLAY_FILE=${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/overlay.dts
 ```
 
+最後にこんなのが表示されればよい
+
+```bash
+### zephyr_venv
+[124/124] Linking C executable zephyr/zephyr.elf
+Memory region         Used Size  Region Size  %age Used
+             RAM:       22788 B       256 MB      0.01%
+        IDT_LIST:           0 B         4 KB      0.00%
+Generating files from /home/takasehideki/nviot/zephyr_ws/build/hello_litex/zephyr/zephyr.elf for board: litex_vexriscv/litex_vexriscv
+```
+
 今度は LiteX 用の(ry で，Zephyr をアプリごと serial boot する
 
 ```bash
@@ -176,6 +265,7 @@ litex_term /dev/ttyUSB1 \
 最後にこんな表示が出てきたらOK
 
 ```bash
+### litex_venv
 Executing booted program at 0x40000000
 
 --============== Liftoff! ==============--
@@ -250,6 +340,16 @@ PING 192.168.11.102 (192.168.11.102) 56(84) bytes of data.
 rtt min/avg/max/mdev = 0.860/1.009/1.466/0.229 ms
 ```
 
+ボードからホストにも疎通確認してみる．
+
+```bash
+uart:~$ net ping 192.168.11.105 
+PING 192.168.11.105
+28 bytes from 192.168.11.105 to 192.168.11.102: icmp_seq=1 ttl=64 time=1 ms
+28 bytes from 192.168.11.105 to 192.168.11.102: icmp_seq=2 ttl=64 time=0 ms
+28 bytes from 192.168.11.105 to 192.168.11.102: icmp_seq=3 ttl=64 time=0 ms
+```
+
 ## 3. zenoh-picoの導入と動作確認
 
 ### 準備
@@ -259,7 +359,7 @@ Zephyr 向けの zenoh-pico のモジュールを取得する設定は [zephyr_w
 `west update` でこのモジュールを取得する．
 
 ```bash
-### zephyr_env
+### zephyr_venv
 cd ${ZEPHYR_WS_ROOT}
 
 west update zenoh-pico
@@ -299,7 +399,7 @@ pip install eclipse-zenoh==1.8.0
 下記の例のようにホストPCのIPアドレスを環境変数 `ZENOH_LOCATOR` に設定し，pub,sub 両方のアプリをビルドする．
 
 ```bash
-### zephyr_env
+### zephyr_venv
 cd ${ZEPHYR_WS_ROOT}
 
 export ZENOH_LOCATOR="tcp/192.168.11.105:7447"
