@@ -2,8 +2,8 @@
 /litex_ws/*
 !/litex_ws/.gitkeep
 
-# Zephyr: Ignore venv, Zephyr SDK, and build directories
-/zephyr_ws/zephyr_env/
+# Zephyr: Ignore venv, Zephyr SDK, build dir, etc.
+/zephyr_ws/zephyr_venv/
 /zephyr_ws/.west/
 /zephyr_ws/zephyr/
 /zephyr_ws/toolchains/
