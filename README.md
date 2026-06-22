@@ -314,6 +314,8 @@ west build -p always \
 
 ### 動作確認
 
+#### target board Pub -> host laptop Sub
+
 ターミナルを３つ開く．
 
 １つめでは `zenohd` を起動する．
@@ -340,4 +342,32 @@ python3 z_sub.py
 litex_term /dev/ttyUSB1 \
   --speed 115200 \
   --kernel ${ZEPHYR_WS_ROOT}/build/zenoh_pub/zephyr/zephyr.bin
+```
+
+#### target board Sub <- host laptop Pub
+
+１つめでは `zenohd` を起動する．
+
+```bash
+cd ${REPO_ROOT}/zenoh_ws/zenohd
+
+./zenohd
+```
+
+２つめでは [z_pub.py](zenoh_ws/z_pub.py) を実行する．
+
+```bash
+### zenoh_venv
+cd ${REPO_ROOT}/zenoh_ws
+
+python3 z_pub.py
+```
+
+３つめでは LiteX の venv で serial boot する．
+
+```bash
+### litex_venv
+litex_term /dev/ttyUSB1 \
+  --speed 115200 \
+  --kernel ${ZEPHYR_WS_ROOT}/build/zenoh_sub/zephyr/zephyr.bin
 ```

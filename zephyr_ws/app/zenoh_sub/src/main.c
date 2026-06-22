@@ -1,61 +1,95 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <zenoh-pico.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
 
-#if Z_FEATURE_SUBSCRIPTION == 1
-#define CLIENT_OR_PEER 0  // 0: Client mode; 1: Peer mode
-#if CLIENT_OR_PEER == 0
+LOG_MODULE_REGISTER(zenoh_sub, CONFIG_LOG_DEFAULT_LEVEL);
+
+/* Keep this forward declaration before dhcpv4.h so include sorting does not
+ * break type identity. */
+struct net_if;
+
+#include <zephyr/net/dhcpv4.h>
+#include <zephyr/net/net_if.h>
+#include <zephyr/net/net_ip.h>
+
 #define MODE "client"
-#define LOCATOR ""  // If empty, it will scout
-#elif CLIENT_OR_PEER == 1
-#define MODE "peer"
-#define LOCATOR "udp/224.0.0.225:7447#iface=en0"
-#else
-#error "Unknown Zenoh operation mode. Check CLIENT_OR_PEER value."
+#ifndef ZENOH_LOCATOR
+#define ZENOH_LOCATOR ""
 #endif
+#define LOCATOR ZENOH_LOCATOR
 
 #define KEYEXPR "demo/example/**"
 
-void data_handler(z_loaned_sample_t* sample, void* arg) {
+static void data_handler(z_loaned_sample_t* sample, void* arg) {
+  ARG_UNUSED(arg);
+
   z_view_string_t keystr;
   z_keyexpr_as_view_string(z_sample_keyexpr(sample), &keystr);
   z_owned_string_t value;
   z_bytes_to_string(z_sample_payload(sample), &value);
-  printf(" >> [Subscriber handler] Received ('%.*s': '%.*s')\n",
-         (int)z_string_len(z_loan(keystr)), z_string_data(z_loan(keystr)),
-         (int)z_string_len(z_loan(value)), z_string_data(z_loan(value)));
+
+  LOG_INF("Received ('%.*s': '%.*s')", (int)z_string_len(z_loan(keystr)),
+          z_string_data(z_loan(keystr)), (int)z_string_len(z_loan(value)),
+          z_string_data(z_loan(value)));
   z_drop(z_move(value));
 }
 
-int main(int argc, char** argv) {
-  sleep(5);
+static int wait_for_ipv4(void) {
+  struct net_if* iface = net_if_get_default();
+  char addr_buf[NET_IPV4_ADDR_LEN];
 
-  // Initialize Zenoh Session and other parameters
+  LOG_INF("Waiting for IPv4 address via DHCP...");
+
+  if (iface == NULL) {
+    LOG_ERR("no default network interface");
+    return -1;
+  }
+
+  net_if_up(iface);
+  net_dhcpv4_start(iface);
+
+  while (1) {
+    struct net_in_addr* addr =
+        net_if_ipv4_get_global_addr(iface, NET_ADDR_PREFERRED);
+
+    if (addr != NULL) {
+      LOG_INF("IPv4 address is ready: %s",
+              net_addr_ntop(NET_AF_INET, addr, addr_buf, sizeof(addr_buf)));
+      return 0;
+    }
+
+    k_sleep(K_SECONDS(1));
+  }
+}
+
+int main(void) {
+  if (wait_for_ipv4() != 0) {
+    return -1;
+  }
+
   z_owned_config_t config;
   z_config_default(&config);
   zp_config_insert(z_loan_mut(config), Z_CONFIG_MODE_KEY, MODE);
   if (strcmp(LOCATOR, "") != 0) {
-    if (strcmp(MODE, "client") == 0) {
-      zp_config_insert(z_loan_mut(config), Z_CONFIG_CONNECT_KEY, LOCATOR);
-    } else {
-      zp_config_insert(z_loan_mut(config), Z_CONFIG_LISTEN_KEY, LOCATOR);
-    }
+    LOG_INF("Using Zenoh locator from compile-time env: %s", LOCATOR);
+    zp_config_insert(z_loan_mut(config), Z_CONFIG_CONNECT_KEY, LOCATOR);
   }
 
-  // Open Zenoh session
-  printf("Opening Zenoh Session...");
+  LOG_INF("Opening Zenoh Session...");
   z_owned_session_t s;
   if (z_open(&s, z_move(config), NULL) < 0) {
-    printf("Unable to open session!\n");
+    LOG_ERR("Unable to open session!");
     return -1;
   }
-  printf("OK\n");
+  LOG_INF("OK");
 
-  // Start the receive and the session lease loop for zenoh-pico
   zp_start_read_task(z_loan_mut(s), NULL);
   zp_start_lease_task(z_loan_mut(s), NULL);
 
-  printf("Declaring Subscriber on '%s'...", KEYEXPR);
+  LOG_INF("Declaring subscriber on '%s'...", KEYEXPR);
   z_owned_closure_sample_t callback;
   z_closure(&callback, data_handler, NULL, NULL);
   z_view_keyexpr_t ke;
@@ -63,28 +97,19 @@ int main(int argc, char** argv) {
   z_owned_subscriber_t sub;
   if (z_declare_subscriber(z_loan(s), &sub, z_loan(ke), z_move(callback),
                            NULL) < 0) {
-    printf("Unable to declare subscriber.\n");
+    LOG_ERR("Unable to declare subscriber.");
     return -1;
   }
-  printf("OK!\n");
+  LOG_INF("OK");
 
   while (1) {
-    sleep(1);
+    k_sleep(K_SECONDS(1));
   }
 
-  printf("Closing Zenoh Session...");
+  LOG_INF("Closing Zenoh Session...");
   z_drop(z_move(sub));
-
   z_drop(z_move(s));
-  printf("OK!\n");
+  LOG_INF("OK!");
 
   return 0;
 }
-#else
-int main(void) {
-  printf(
-      "ERROR: Zenoh pico was compiled without Z_FEATURE_SUBSCRIPTION but this "
-      "example requires it.\n");
-  return -2;
-}
-#endif
