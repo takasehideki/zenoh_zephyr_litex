@@ -3,7 +3,9 @@ import time
 import zenoh
 
 
+# Note: from the host laptop perspective we *publish* to the board's SUB key-expr
 PUB_KEY_EXPR = "demo/example/zenoh-pico-pubsub/sub"
+# ...and we *subscribe* to the board's PUB key-expr
 SUB_KEY_EXPR = "demo/example/zenoh-pico-pubsub/pub"
 VALUE = "Pub from zenoh-python!"
 INTERVAL_SEC = 1.0
