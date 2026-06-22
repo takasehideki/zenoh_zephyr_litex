@@ -12,3 +12,7 @@
 /zephyr_ws/toolchains/
 /zephyr_ws/build/
 /zephyr_ws/modules/
+
+# Zenoh: Ignore venv, zenohd binary, etc.
+/zenoh_ws/zenoh_venv/
+/zenoh_ws/zenohd/
