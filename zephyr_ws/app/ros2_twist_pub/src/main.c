@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include <stdint.h>
 #include <string.h>
 #include <zenoh-pico.h>
 #include <zephyr/kernel.h>
@@ -15,10 +15,17 @@ LOG_MODULE_REGISTER(app, CONFIG_LOG_DEFAULT_LEVEL);
 #endif
 #define LOCATOR ZENOH_LOCATOR
 
-#define NODE_NAME "zp_pub"
+#define NODE_NAME "zp_turtle"
 #define NODE_ID 0
-#define PUB_ID 10
-#define VALUE "Hello from zenoh-pico (for rmw_zenoh)"
+#define PUB_ID 20
+
+#define LINEAR_X 1.0
+#define LINEAR_Y 0.0
+#define LINEAR_Z 0.0
+#define ANGULAR_X 0.0
+#define ANGULAR_Y 0.0
+#define ANGULAR_Z 0.6
+#define PUBLISH_PERIOD_MS 100
 
 int main(void) {
   int rc = dhcpv4_wait_for_ipv4();
@@ -60,8 +67,8 @@ int main(void) {
                                       NODE_ID, NODE_NAME) < 0 ||
       rmw_zenoh_build_pub_liveliness(
           pub_lv, sizeof(pub_lv), session_zid, NODE_ID, PUB_ID, NODE_NAME,
-          RMW_ZENOH_STRING_TOPIC, RMW_ZENOH_STRING_TYPE_NAME,
-          RMW_ZENOH_STRING_TYPE_HASH) < 0) {
+          RMW_ZENOH_TWIST_TOPIC, RMW_ZENOH_TWIST_TYPE_NAME,
+          RMW_ZENOH_TWIST_TYPE_HASH) < 0) {
     LOG_ERR("Unable to build rmw_zenoh liveliness keyexprs");
     return -1;
   }
@@ -78,9 +85,9 @@ int main(void) {
   LOG_INF("Declared liveliness node token: %s", node_lv);
   LOG_INF("Declared liveliness pub token : %s", pub_lv);
 
-  LOG_INF("Declaring publisher for '%s'...", RMW_ZENOH_STRING_TOPIC_KEYEXPR);
+  LOG_INF("Declaring publisher for '%s'...", RMW_ZENOH_TWIST_TOPIC_KEYEXPR);
   z_view_keyexpr_t pub_ke;
-  z_view_keyexpr_from_str_unchecked(&pub_ke, RMW_ZENOH_STRING_TOPIC_KEYEXPR);
+  z_view_keyexpr_from_str_unchecked(&pub_ke, RMW_ZENOH_TWIST_TOPIC_KEYEXPR);
   z_owned_publisher_t pub;
   if (z_declare_publisher(z_loan(session), &pub, z_loan(pub_ke), NULL) < 0) {
     LOG_ERR("Unable to declare publisher");
@@ -91,19 +98,17 @@ int main(void) {
   uint8_t gid[16];
   rmw_zenoh_fill_gid(gid, z_loan(session), PUB_ID);
 
-  char text[160];
   for (int64_t seq = 0; 1; ++seq) {
-    k_sleep(K_SECONDS(1));
-    snprintk(text, sizeof(text), "[%4lld] %s", (long long)seq, VALUE);
-
     z_owned_bytes_t payload;
     z_owned_bytes_t attachment;
     z_owned_encoding_t encoding;
-    if (rmw_zenoh_serialize_string_payload(&payload, text) < 0 ||
+    if (rmw_zenoh_serialize_twist_payload(&payload, LINEAR_X, LINEAR_Y,
+                                          LINEAR_Z, ANGULAR_X, ANGULAR_Y,
+                                          ANGULAR_Z) < 0 ||
         rmw_zenoh_build_attachment(&attachment, seq, rmw_zenoh_now_ns(), gid) <
             0 ||
         rmw_zenoh_make_cdr_encoding(&encoding) < 0) {
-      LOG_ERR("Unable to build rmw_zenoh sample");
+      LOG_ERR("Unable to build rmw_zenoh Twist sample");
       return -1;
     }
 
@@ -112,11 +117,13 @@ int main(void) {
     opts.encoding = z_move(encoding);
     opts.attachment = z_move(attachment);
 
-    LOG_INF("Publishing ('%s': '%s')", RMW_ZENOH_STRING_TOPIC_KEYEXPR, text);
+    LOG_INF("Publishing Twist seq=%lld", (long long)seq);
     if (z_publisher_put(z_loan(pub), z_move(payload), &opts) < 0) {
       LOG_ERR("Unable to publish");
       return -1;
     }
+
+    k_sleep(K_MSEC(PUBLISH_PERIOD_MS));
   }
 
   return 0;

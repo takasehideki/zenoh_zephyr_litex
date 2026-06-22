@@ -1,6 +1,6 @@
 manifest:
   projects:
     - name: zenoh-pico
-      url: https://github.com/eclipse-zenoh/zenoh-pico.git
-      revision: 1.8.0
+      url: https://github.com/takasehideki/zenoh-pico.git
+      revision: 1193d97a4d2e08e18df609e3f0bdcc4ab36f47e0
       path: modules/lib/zenoh-pico
