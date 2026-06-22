@@ -56,10 +56,13 @@ int main(void) {
 
   char node_lv[256];
   char pub_lv[512];
-  rmw_zenoh_build_node_liveliness(node_lv, sizeof(node_lv), session_zid,
-                                  NODE_ID, NODE_NAME);
-  rmw_zenoh_build_pub_liveliness(pub_lv, sizeof(pub_lv), session_zid, NODE_ID,
-                                 PUB_ID, NODE_NAME);
+  if (rmw_zenoh_build_node_liveliness(node_lv, sizeof(node_lv), session_zid,
+                                      NODE_ID, NODE_NAME) < 0 ||
+      rmw_zenoh_build_pub_liveliness(pub_lv, sizeof(pub_lv), session_zid,
+                                     NODE_ID, PUB_ID, NODE_NAME) < 0) {
+    LOG_ERR("Unable to build rmw_zenoh liveliness keyexprs");
+    return -1;
+  }
 
   z_owned_liveliness_token_t node_token;
   z_owned_liveliness_token_t pub_token;
@@ -89,7 +92,7 @@ int main(void) {
   char text[160];
   for (int64_t seq = 0; 1; ++seq) {
     k_sleep(K_SECONDS(1));
-    snprintk(text, sizeof(text), "[%4lld] %s", seq, VALUE);
+    snprintk(text, sizeof(text), "[%4lld] %s", (long long)seq, VALUE);
 
     z_owned_bytes_t payload;
     z_owned_bytes_t attachment;

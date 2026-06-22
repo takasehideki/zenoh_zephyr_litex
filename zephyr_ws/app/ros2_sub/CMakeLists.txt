@@ -12,6 +12,6 @@ target_include_directories(
   app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../common/include)
 
 if(DEFINED ENV{ZENOH_LOCATOR} AND NOT "$ENV{ZENOH_LOCATOR}" STREQUAL "")
-  target_compile_definitions(app PRIVATE ZENOH_LOCATOR="$ENV{ZENOH_LOCATOR}")
+  target_compile_definitions(app PRIVATE ZENOH_LOCATOR=\"$ENV{ZENOH_LOCATOR}\")
   message(STATUS "ros2_sub: ZENOH_LOCATOR is set from environment")
 endif()

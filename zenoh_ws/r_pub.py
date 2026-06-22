@@ -186,6 +186,9 @@ def main() -> None:
         print("[INFO] publisher declared")
 
         seq = 0
+        # Keep declared tokens alive for session lifetime.
+        _ = (lv_node, lv_pub, lv_sub)
+
         while True:
             text = f"[{seq:4d}] {VALUE}"
             payload = serialize_std_msgs_string_cdr(text)
@@ -198,9 +201,6 @@ def main() -> None:
             print(f"[TX] seq={seq} text={text!r} bytes={len(payload)}")
             seq += 1
             time.sleep(INTERVAL_SEC)
-
-        # Keep declared tokens alive for session lifetime.
-        _ = (lv_node, lv_pub, lv_sub)
 
 
 if __name__ == "__main__":

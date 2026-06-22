@@ -84,10 +84,13 @@ def deserialize_std_msgs_string_cdr(payload: bytes) -> str:
         raise ValueError(f"payload too short for std_msgs/String CDR: {len(payload)} bytes")
 
     encapsulation = payload[:4]
-    if encapsulation not in (b"\x00\x01\x00\x00", b"\x00\x00\x00\x00"):
+    if encapsulation == b"\x00\x01\x00\x00":
+        strlen = struct.unpack_from("<I", payload, 4)[0]
+    elif encapsulation == b"\x00\x00\x00\x00":
+        strlen = struct.unpack_from(">I", payload, 4)[0]
+    else:
         raise ValueError(f"unexpected CDR encapsulation: {encapsulation.hex()}")
 
-    strlen = struct.unpack_from("<I", payload, 4)[0]
     start = 8
     end = start + strlen
     if end > len(payload):
@@ -222,11 +225,11 @@ def main() -> None:
         sub = session.declare_subscriber(keyexpr, listener)
         print("[INFO] subscriber declared")
 
-        while True:
-            time.sleep(1)
-
         # Keep declared objects alive for session lifetime.
         _ = (lv_node, lv_sub_token, lv_monitor, sub)
+
+        while True:
+            time.sleep(1)
 
 
 if __name__ == "__main__":

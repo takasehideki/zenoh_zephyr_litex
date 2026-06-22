@@ -71,10 +71,13 @@ int main(void) {
 
   char node_lv[256];
   char sub_lv[512];
-  rmw_zenoh_build_node_liveliness(node_lv, sizeof(node_lv), session_zid,
-                                  NODE_ID, NODE_NAME);
-  rmw_zenoh_build_sub_liveliness(sub_lv, sizeof(sub_lv), session_zid, NODE_ID,
-                                 SUB_ID, NODE_NAME);
+  if (rmw_zenoh_build_node_liveliness(node_lv, sizeof(node_lv), session_zid,
+                                      NODE_ID, NODE_NAME) < 0 ||
+      rmw_zenoh_build_sub_liveliness(sub_lv, sizeof(sub_lv), session_zid,
+                                     NODE_ID, SUB_ID, NODE_NAME) < 0) {
+    LOG_ERR("Unable to build rmw_zenoh liveliness keyexprs");
+    return -1;
+  }
 
   z_owned_liveliness_token_t node_token;
   z_owned_liveliness_token_t sub_token;
