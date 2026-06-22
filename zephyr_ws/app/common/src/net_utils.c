@@ -13,6 +13,8 @@ struct net_if;
 
 LOG_MODULE_DECLARE(net_utils, CONFIG_LOG_DEFAULT_LEVEL);
 
+#define IPV4_DHCP_WAIT_TIMEOUT_S 60
+
 int wait_for_ipv4(void) {
   struct net_if* iface = net_if_get_default();
   char addr_buf[NET_IPV4_ADDR_LEN];
@@ -27,7 +29,7 @@ int wait_for_ipv4(void) {
   net_if_up(iface);
   net_dhcpv4_start(iface);
 
-  while (1) {
+  for (int waited_s = 0; waited_s < IPV4_DHCP_WAIT_TIMEOUT_S; ++waited_s) {
     struct net_in_addr* addr =
         net_if_ipv4_get_global_addr(iface, NET_ADDR_PREFERRED);
 
@@ -39,4 +41,7 @@ int wait_for_ipv4(void) {
 
     k_sleep(K_SECONDS(1));
   }
+
+  LOG_ERR("Timed out waiting for IPv4 address via DHCP");
+  return -1;
 }
