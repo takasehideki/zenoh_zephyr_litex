@@ -16,3 +16,4 @@
 # Zenoh: Ignore venv, zenohd binary, etc.
 /zenoh_ws/zenoh_venv/
 /zenoh_ws/zenohd/
+/zenoh_ws/__pycache__/

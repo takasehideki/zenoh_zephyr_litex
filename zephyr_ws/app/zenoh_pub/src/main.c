@@ -1,26 +1,29 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <zenoh-pico.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
 
-#define CLIENT_OR_PEER 0  // 0: Client mode; 1: Peer mode
-#if CLIENT_OR_PEER == 0
+#include "ipv4_dhcp_client.h"
+
+LOG_MODULE_REGISTER(app, CONFIG_LOG_DEFAULT_LEVEL);
+
 #define MODE "client"
-#define LOCATOR ""  // If empty, it will scout
-#elif CLIENT_OR_PEER == 1
-#define MODE "peer"
-#define LOCATOR "udp/224.0.0.225:7447#iface=en0"
-#else
-#error "Unknown Zenoh operation mode. Check CLIENT_OR_PEER value."
+#ifndef ZENOH_LOCATOR
+#define ZENOH_LOCATOR ""
 #endif
+#define LOCATOR ZENOH_LOCATOR
 
 #define KEYEXPR "demo/example/zenoh-pico-pub"
-#define VALUE "[STSTM32]{nucleo-F767ZI} Pub from Zenoh-Pico!"
+#define VALUE "Pub from Zenoh-Pico!"
 
-#if Z_FEATURE_PUBLICATION == 1
-int main(int argc, char** argv) {
-  sleep(5);
+int main(void) {
+  int rc = dhcpv4_wait_for_ipv4();
+  if (rc != 0) {
+    LOG_ERR("DHCPv4 failed (%d)", rc);
+    return rc;
+  }
 
   // Initialize Zenoh Session and other parameters
   z_owned_config_t config;
@@ -28,6 +31,7 @@ int main(int argc, char** argv) {
   zp_config_insert(z_loan_mut(config), Z_CONFIG_MODE_KEY, MODE);
   if (strcmp(LOCATOR, "") != 0) {
     if (strcmp(MODE, "client") == 0) {
+      LOG_INF("Using Zenoh locator from compile-time env: %s", LOCATOR);
       zp_config_insert(z_loan_mut(config), Z_CONFIG_CONNECT_KEY, LOCATOR);
     } else {
       zp_config_insert(z_loan_mut(config), Z_CONFIG_LISTEN_KEY, LOCATOR);
@@ -35,33 +39,33 @@ int main(int argc, char** argv) {
   }
 
   // Open Zenoh session
-  printf("Opening Zenoh Session...");
+  LOG_INF("Opening Zenoh Session...");
   z_owned_session_t s;
   if (z_open(&s, z_move(config), NULL) < 0) {
-    printf("Unable to open session!\n");
+    LOG_ERR("Unable to open session!");
     return -1;
   }
-  printf("OK\n");
+  LOG_INF("OK");
 
   // Start the receive and the session lease loop for zenoh-pico
   zp_start_read_task(z_loan_mut(s), NULL);
   zp_start_lease_task(z_loan_mut(s), NULL);
 
-  printf("Declaring publisher for '%s'...", KEYEXPR);
+  LOG_INF("Declaring publisher for '%s'...", KEYEXPR);
   z_view_keyexpr_t ke;
   z_view_keyexpr_from_str_unchecked(&ke, KEYEXPR);
   z_owned_publisher_t pub;
   if (z_declare_publisher(z_loan(s), &pub, z_loan(ke), NULL) < 0) {
-    printf("Unable to declare publisher for key expression!\n");
+    LOG_ERR("Unable to declare publisher for key expression!");
     return -1;
   }
-  printf("OK\n");
+  LOG_INF("OK");
 
   char buf[256];
   for (int idx = 0; 1; ++idx) {
-    sleep(1);
-    sprintf(buf, "[%4d] %s", idx, VALUE);
-    printf("Putting Data ('%s': '%s')...\n", KEYEXPR, buf);
+    k_sleep(K_SECONDS(1));
+    snprintk(buf, sizeof(buf), "[%4d] %s", idx, VALUE);
+    LOG_INF("Putting Data ('%s': '%s')...", KEYEXPR, buf);
 
     // Create payload
     z_owned_bytes_t payload;
@@ -70,19 +74,11 @@ int main(int argc, char** argv) {
     z_publisher_put(z_loan(pub), z_move(payload), NULL);
   }
 
-  printf("Closing Zenoh Session...");
+  LOG_INF("Closing Zenoh Session...");
   z_drop(z_move(pub));
 
   z_drop(z_move(s));
-  printf("OK!\n");
+  LOG_INF("OK!");
 
   return 0;
 }
-#else
-int main(void) {
-  printf(
-      "ERROR: Zenoh pico was compiled without Z_FEATURE_PUBLICATION but this "
-      "example requires it.\n");
-  return -2;
-}
-#endif
