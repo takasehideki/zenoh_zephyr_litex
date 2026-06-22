@@ -386,6 +386,7 @@ PING 192.168.11.105
 ### 準備
 
 Zephyr 向けの zenoh-pico のモジュールを取得する設定は [zephyr_ws/manifest/submanifests/zenoh-pico.yaml](zephyr_ws/manifest/submanifests/zenoh-pico.yaml) に記述してある．
+基本的には 1.8.0 であるが，"4. rmw_zenoh との連携"の試作中にIssue??が見つかったので，[ひとまず fork して無理くり patch したもの](https://github.com/takasehideki/zenoh-pico/commit/1193d97a4d2e08e18df609e3f0bdcc4ab36f47e0)を使うことにする（TODO: 精密に調査検証して本家へ let's contribution!!）
 
 `west update` でこのモジュールを取得する．
 
