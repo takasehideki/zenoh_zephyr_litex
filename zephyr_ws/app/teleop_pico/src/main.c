@@ -2,7 +2,7 @@
 #include <string.h>
 #include <zenoh-pico.h>
 #include <zephyr/devicetree.h>
-#include <zephyr/drivers/spi.h>
+#include <zephyr/drivers/sensor.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
@@ -17,89 +17,29 @@ LOG_MODULE_REGISTER(teleop_pico, CONFIG_LOG_DEFAULT_LEVEL);
 #endif
 #define LOCATOR ZENOH_LOCATOR
 
-#define GYRO_NODE DT_NODELABEL(pmod_gyro)
+#define ACCEL_NODE DT_NODELABEL(pmod_acl2)
 
 #define NODE_NAME "zp_turtle"
 #define NODE_ID 0
 #define PUB_ID 20
 
-#define L3G4200D_WHO_AM_I 0x0f
-#define L3G4200D_CTRL_REG1 0x20
-#define L3G4200D_CTRL_REG4 0x23
-#define L3G4200D_OUT_X_L 0x28
-
-#define L3G4200D_READ BIT(7)
-#define L3G4200D_AUTO_INCREMENT BIT(6)
-#define L3G4200D_WHO_AM_I_VALUE 0xd3
-
 #define SAMPLE_PERIOD_MS 100
 #define BIAS_SAMPLE_COUNT 50
 
-#define DEADZONE_MDPS 1200
-#define LINEAR_GAIN_PER_MDPS 0.00003
-#define ANGULAR_GAIN_PER_MDPS 0.00005
+#define DEADZONE_MS2 1.0
+#define LINEAR_GAIN_PER_MS2 0.35
+#define ANGULAR_GAIN_PER_MS2 0.90
 #define MAX_LINEAR_X 1.2
 #define MAX_ANGULAR_Z 2.0
 
-static const struct spi_dt_spec gyro_spi =
-    SPI_DT_SPEC_GET(GYRO_NODE, SPI_OP_MODE_MASTER | SPI_WORD_SET(8));
-
-static int gyro_read_reg(uint8_t reg, uint8_t* value) {
-  uint8_t tx_buf[2] = {reg | L3G4200D_READ, 0x00};
-  uint8_t rx_buf[2] = {0};
-  const struct spi_buf tx_spi_buf = {.buf = tx_buf, .len = sizeof(tx_buf)};
-  const struct spi_buf rx_spi_buf = {.buf = rx_buf, .len = sizeof(rx_buf)};
-  const struct spi_buf_set tx = {.buffers = &tx_spi_buf, .count = 1};
-  const struct spi_buf_set rx = {.buffers = &rx_spi_buf, .count = 1};
-
-  int rc = spi_transceive_dt(&gyro_spi, &tx, &rx);
-  if (rc != 0) {
-    return rc;
+static double apply_deadzone_ms2(double value) {
+  if (value > DEADZONE_MS2) {
+    return value - DEADZONE_MS2;
   }
-
-  *value = rx_buf[1];
-  return 0;
-}
-
-static int gyro_write_reg(uint8_t reg, uint8_t value) {
-  uint8_t tx_buf[2] = {reg, value};
-  const struct spi_buf tx_spi_buf = {.buf = tx_buf, .len = sizeof(tx_buf)};
-  const struct spi_buf_set tx = {.buffers = &tx_spi_buf, .count = 1};
-
-  return spi_write_dt(&gyro_spi, &tx);
-}
-
-static int gyro_read_xyz(int16_t axis[3]) {
-  uint8_t tx_buf[7] = {L3G4200D_OUT_X_L | L3G4200D_READ |
-                       L3G4200D_AUTO_INCREMENT};
-  uint8_t rx_buf[7] = {0};
-  const struct spi_buf tx_spi_buf = {.buf = tx_buf, .len = sizeof(tx_buf)};
-  const struct spi_buf rx_spi_buf = {.buf = rx_buf, .len = sizeof(rx_buf)};
-  const struct spi_buf_set tx = {.buffers = &tx_spi_buf, .count = 1};
-  const struct spi_buf_set rx = {.buffers = &rx_spi_buf, .count = 1};
-
-  int rc = spi_transceive_dt(&gyro_spi, &tx, &rx);
-  if (rc != 0) {
-    return rc;
+  if (value < -DEADZONE_MS2) {
+    return value + DEADZONE_MS2;
   }
-
-  axis[0] = (int16_t)((uint16_t)rx_buf[2] << 8 | rx_buf[1]);
-  axis[1] = (int16_t)((uint16_t)rx_buf[4] << 8 | rx_buf[3]);
-  axis[2] = (int16_t)((uint16_t)rx_buf[6] << 8 | rx_buf[5]);
-
-  return 0;
-}
-
-static int32_t raw_to_mdps(int16_t raw) { return (int32_t)raw * 875 / 100; }
-
-static int32_t apply_deadzone_mdps(int32_t value) {
-  if (value > DEADZONE_MDPS) {
-    return value - DEADZONE_MDPS;
-  }
-  if (value < -DEADZONE_MDPS) {
-    return value + DEADZONE_MDPS;
-  }
-  return 0;
+  return 0.0;
 }
 
 static double clamp_double(double value, double min, double max) {
@@ -112,64 +52,61 @@ static double clamp_double(double value, double min, double max) {
   return value;
 }
 
-static int estimate_bias_mdps(int32_t bias_mdps[3]) {
-  int64_t sum_raw[3] = {0, 0, 0};
+static int read_accel_ms2(const struct device* accel, double axis_ms2[3]) {
+  struct sensor_value accel_xyz[3];
+  int rc = sensor_sample_fetch(accel);
+  if (rc != 0) {
+    return rc;
+  }
 
-  LOG_INF("Estimating gyro bias (%d samples)... keep the board still",
+  rc = sensor_channel_get(accel, SENSOR_CHAN_ACCEL_XYZ, accel_xyz);
+  if (rc != 0) {
+    return rc;
+  }
+
+  axis_ms2[0] = sensor_value_to_double(&accel_xyz[0]);
+  axis_ms2[1] = sensor_value_to_double(&accel_xyz[1]);
+  axis_ms2[2] = sensor_value_to_double(&accel_xyz[2]);
+  return 0;
+}
+
+static int estimate_bias_ms2(const struct device* accel, double bias_ms2[3]) {
+  double sum_ms2[3] = {0.0, 0.0, 0.0};
+
+  LOG_INF("Estimating accelerometer bias (%d samples)... keep the board still",
           BIAS_SAMPLE_COUNT);
 
   for (int i = 0; i < BIAS_SAMPLE_COUNT; ++i) {
-    int16_t raw[3];
-    int rc = gyro_read_xyz(raw);
+    double axis_ms2[3];
+    int rc = read_accel_ms2(accel, axis_ms2);
     if (rc != 0) {
       return rc;
     }
-    sum_raw[0] += raw[0];
-    sum_raw[1] += raw[1];
-    sum_raw[2] += raw[2];
+    sum_ms2[0] += axis_ms2[0];
+    sum_ms2[1] += axis_ms2[1];
+    sum_ms2[2] += axis_ms2[2];
     k_sleep(K_MSEC(SAMPLE_PERIOD_MS));
   }
 
-  bias_mdps[0] = raw_to_mdps((int16_t)(sum_raw[0] / BIAS_SAMPLE_COUNT));
-  bias_mdps[1] = raw_to_mdps((int16_t)(sum_raw[1] / BIAS_SAMPLE_COUNT));
-  bias_mdps[2] = raw_to_mdps((int16_t)(sum_raw[2] / BIAS_SAMPLE_COUNT));
-  LOG_INF("Bias mdps x=%d y=%d z=%d", bias_mdps[0], bias_mdps[1], bias_mdps[2]);
+  bias_ms2[0] = sum_ms2[0] / BIAS_SAMPLE_COUNT;
+  bias_ms2[1] = sum_ms2[1] / BIAS_SAMPLE_COUNT;
+  bias_ms2[2] = sum_ms2[2] / BIAS_SAMPLE_COUNT;
+  LOG_INF("Bias m/s^2 x=%.3f y=%.3f z=%.3f", bias_ms2[0], bias_ms2[1],
+          bias_ms2[2]);
 
   return 0;
 }
 
 int main(void) {
-  if (!spi_is_ready_dt(&gyro_spi)) {
-    LOG_ERR("Pmod GYRO SPI device is not ready");
+  const struct device* accel = DEVICE_DT_GET(ACCEL_NODE);
+  if (!device_is_ready(accel)) {
+    LOG_ERR("Pmod ACL2 device is not ready");
     return -ENODEV;
   }
 
-  uint8_t who_am_i = 0;
-  int rc = gyro_read_reg(L3G4200D_WHO_AM_I, &who_am_i);
-  if (rc != 0) {
-    LOG_ERR("WHO_AM_I read failed (%d)", rc);
-    return rc;
-  }
-
-  LOG_INF("WHO_AM_I=0x%02x", who_am_i);
-  if (who_am_i != L3G4200D_WHO_AM_I_VALUE) {
-    LOG_WRN("Unexpected WHO_AM_I; expected 0x%02x", L3G4200D_WHO_AM_I_VALUE);
-  }
-
-  rc = gyro_write_reg(L3G4200D_CTRL_REG1, 0x0f);
-  if (rc != 0) {
-    LOG_ERR("CTRL_REG1 write failed (%d)", rc);
-    return rc;
-  }
-
-  rc = gyro_write_reg(L3G4200D_CTRL_REG4, 0x80);
-  if (rc != 0) {
-    LOG_ERR("CTRL_REG4 write failed (%d)", rc);
-    return rc;
-  }
-
-  int32_t bias_mdps[3] = {0, 0, 0};
-  rc = estimate_bias_mdps(bias_mdps);
+  int rc;
+  double bias_ms2[3] = {0.0, 0.0, 0.0};
+  rc = estimate_bias_ms2(accel, bias_ms2);
   if (rc != 0) {
     LOG_ERR("Bias estimation failed (%d)", rc);
     return rc;
@@ -239,24 +176,23 @@ int main(void) {
   uint8_t gid[16];
   rmw_zenoh_fill_gid(gid, z_loan(session), PUB_ID);
 
-  LOG_INF("Teleop started: publishing Twist from gyro");
+  LOG_INF("Teleop started: publishing Twist from ACL2");
 
   for (int64_t seq = 0;; ++seq) {
-    int16_t raw[3];
-    rc = gyro_read_xyz(raw);
+    double accel_ms2[3];
+    rc = read_accel_ms2(accel, accel_ms2);
     if (rc != 0) {
-      LOG_ERR("XYZ read failed (%d)", rc);
+      LOG_ERR("Accelerometer read failed (%d)", rc);
       k_sleep(K_MSEC(SAMPLE_PERIOD_MS));
       continue;
     }
 
-    int32_t mdps_x = apply_deadzone_mdps(raw_to_mdps(raw[0]) - bias_mdps[0]);
-    int32_t mdps_y = apply_deadzone_mdps(raw_to_mdps(raw[1]) - bias_mdps[1]);
-    int32_t mdps_z = apply_deadzone_mdps(raw_to_mdps(raw[2]) - bias_mdps[2]);
+    double delta_x = apply_deadzone_ms2(accel_ms2[0] - bias_ms2[0]);
+    double delta_y = apply_deadzone_ms2(accel_ms2[1] - bias_ms2[1]);
 
-    double linear_x = clamp_double(-((double)mdps_y) * LINEAR_GAIN_PER_MDPS,
+    double linear_x = clamp_double(-(delta_y)*LINEAR_GAIN_PER_MS2,
                                    -MAX_LINEAR_X, MAX_LINEAR_X);
-    double angular_z = clamp_double(((double)mdps_z) * ANGULAR_GAIN_PER_MDPS,
+    double angular_z = clamp_double((delta_x)*ANGULAR_GAIN_PER_MS2,
                                     -MAX_ANGULAR_Z, MAX_ANGULAR_Z);
 
     z_owned_bytes_t payload;
@@ -282,9 +218,10 @@ int main(void) {
     }
 
     LOG_INF(
-        "raw x=%d y=%d z=%d mdps x=%d y=%d z=%d -> Twist linear.x=%.3f "
+        "accel x=%.3f y=%.3f z=%.3f delta x=%.3f y=%.3f -> Twist linear.x=%.3f "
         "angular.z=%.3f",
-        raw[0], raw[1], raw[2], mdps_x, mdps_y, mdps_z, linear_x, angular_z);
+        accel_ms2[0], accel_ms2[1], accel_ms2[2], delta_x, delta_y, linear_x,
+        angular_z);
 
     k_sleep(K_MSEC(SAMPLE_PERIOD_MS));
   }

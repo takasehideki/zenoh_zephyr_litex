@@ -1,5 +1,0 @@
-description: ST L3G4200D three-axis gyroscope on SPI
-
-compatible: "st,l3g4200d"
-
-include: spi-device.yaml

@@ -1,86 +1,49 @@
-# teleop_pico: Pmod GYRO で turtlesim teleop
+# teleop_pico: Pmod ACL2 で turtlesim teleop
 
-Pmod GYRO を Arty A7 の Pmod コネクタにつなぎ，最終的には傾きや回転に応じて turtlesim の `/turtle1/cmd_vel` を publish する．
+[Pmod ACL2 (ADXL362)](https://digilent.com/reference/pmod/pmodacl2/start) を Arty A7 の Pmod コネクタにつなぎ，ボードの傾きに応じて turtlesim の `/turtle1/cmd_vel` を publish する手順．
 
-次の手順で進める．
+## 概要
 
-1. 制御仕様を決める
-2. Pmod GYRO のチップと SPI 仕様を確認する
-3. LiteX FPGA 側に Pmod 用 SPI master を追加する
-4. Zephyr 側の devicetree/Kconfig を整える
-5. プログラムを実装してビルドする
-6. 実機で動作確認する
+この `teleop_pico` は以下を実装している．
 
-## 1. 制御仕様の検討
+1. ADXL362 の加速度を Zephyr sensor API で取得
+2. 起動直後に静止状態でバイアス推定
+3. deadzone と速度クランプを適用して Twist に変換
+4. rmw_zenoh 互換 keyexpr で `geometry_msgs/msg/Twist` を publish
 
-Pmod GYRO は加速度センサではなく角速度センサなので，静的な「傾き角」を安定して得るには積分とドリフト補正が必要になる．
-今回のデモでは角速度をそのまま turtlesim の速度指令へ割り当てることにする．
+## 1. LiteX 側: SPI master を有効化
 
-- `gyro_z` を `angular.z` に割り当てる: ボードを水平面内でひねると turtle が旋回する
-- `gyro_y` を `linear.x` に割り当てる: ボードを前後方向に回すと turtle が前進/後退する
-- 起動後に数秒静止させてゼロバイアスを測る
-- deadzone と最大速度 clamp を入れて，手を離したときに turtle が暴れないようにする
-
-この手順では，Pmod GYRO から生データを取得し，ゼロバイアス推定・deadzone・速度クランプを適用して `Twist` の値に変換し，これを ROS 2 message として publish する．
-
-## 2. Pmod GYRO の SPI 仕様確認
-
-Digilent Pmod GYRO は ST L3G4200D を使っている想定で進める．
-接続・実装前に Digilent のリファレンスと L3G4200D のデータシートで以下を確認した．
-
-- 電源は 3.3 V
-- SPI 信号は `CS`, `MOSI`, `MISO`, `SCLK`
-- `WHO_AM_I` register は `0x0f`
-- `WHO_AM_I` の期待値は `0xd3`
-- X/Y/Z の出力レジスタは `OUT_X_L = 0x28` から 6 byte
-- 250 dps full-scale 時の感度はおおむね `8.75 mdps/LSB`
-
-注意点として，Zephyr の `litex,spi` ドライバと LiteX の `SPIMaster` は現状 `CPOL=0, CPHA=0` のみ対応している．
-Pmod GYRO 側が SPI mode 3 必須だった場合，`teleop_pico` の `WHO_AM_I` が `0xd3` にならない可能性がある．
-結果的には不要であったが，この場合は LiteX/Zephyr の SPI mode 対応を追加するか，mode 0 で通信できる別の SPI 実装を用意する必要がある．
-
-## 3. LiteX に Pmod 用 SPI master を追加
-
-Arty A7 の Pmod D に Pmod GYRO を接続する想定で進める．Pmod の SPI 4 信号は以下の割り当てにする．
-
-| Pmod GYRO | Pmod D | LiteX pads |
-| --- | --- | --- |
-| `CS` | pin 1 | `pmodd:0` |
-| `MOSI` | pin 2 | `pmodd:1` |
-| `MISO` | pin 3 | `pmodd:2` |
-| `SCLK` | pin 4 | `pmodd:3` |
-
-まず LiteX の Arty target に Pmod GYRO 用オプションを追加する．直接手で編集する代わりに，[digilent_arty_pmod_gyro.patch](digilent_arty_pmod_gyro.patch) を当てる．この patch は `--pmod-gyro pmoda|pmodb|pmodc|pmodd` を追加し，Pmod の位置を引数で選べるようにする．
+Arty target へ Pmod ACL2 用 SPI master 追加の patch を適用する．
 
 ```bash
 ### litex_venv
 cd ${LITEX_WS_ROOT}/litex_setup/litex-boards
 
-git apply ${ZEPHYR_WS_ROOT}/app/teleop_pico/digilent_arty_pmod_gyro.patch
+git apply ${ZEPHYR_WS_ROOT}/app/teleop_pico/digilent_arty_pmod_acl2.patch
 ```
 
-この patch により `digilent_arty.py` に `--pmod-gyro` が追加され，指定した Pmod の `:0..3` に LiteX 側の `spimaster` が割り当てられる．Zephyr の overlay ではこれが `spi0` として有効化される．Pmod D を使うなら `--pmod-gyro pmodd` を指定する．すでに patch が当たっているか確認するには以下を見る．
+必要なら reverse apply で patch をもとに戻せる．
 
 ```bash
 ### litex_venv
-$ grep -n 'pmod-gyro\|pmod_gyro_spi\|spimaster' \
+cd ${LITEX_WS_ROOT}/litex_setup/litex-boards
+
+git apply -R ${ZEPHYR_WS_ROOT}/app/teleop_pico/digilent_arty_pmod_acl2.patch
+```
+
+patch が有効かどうかは `digilent_arty.py` を grep して確認する．
+
+```bash
+### litex_venv
+$ grep -n 'pmod-acl2\|pmod_acl2_spi\|spimaster' \
   ${LITEX_WS_ROOT}/litex_setup/litex-boards/litex_boards/targets/digilent_arty.py
-191:                ("pmod_gyro_spi", 0,
-201:                pads=platform.request("pmod_gyro_spi"),
+193:                ("pmod_acl2_spi", 0,
 202:                name="spimaster",
-238:    parser.add_target_argument("--pmod-gyro", choices=["pmoda", "pmodb", "pmodc", "pmodd"], help="Enable Pmod GYRO SPI on selected PMOD.")
+203:                pads=platform.request("pmod_acl2_spi"),
+240:    parser.add_target_argument("--pmod-acl2", choices=["pmoda", "pmodb", "pmodc", "pmodd"], help="Enable Pmod ACL2 SPI on selected PMOD.")
 ```
 
-patch を戻したい場合は同じ場所で reverse apply する．
-
-```bash
-### litex_venv
-cd ${LITEX_WS_ROOT}/litex_setup/litex-boards
-
-git apply -R ${ZEPHYR_WS_ROOT}/app/teleop_pico/digilent_arty_pmod_gyro.patch
-```
-
-その後，SoC イメージを再生成する．
+Pmod D を使う場合のビルド例:
 
 ```bash
 ### litex_venv
@@ -94,13 +57,13 @@ python3 -m litex_boards.targets.digilent_arty \
   --cpu-type vexriscv \
   --timer-uptime \
   --with-ethernet \
-  --pmod-gyro pmodd \
+  --pmod-acl2 pmodd \
   --csr-json build/csr.json \
   --output-dir build \
   --build
 ```
 
-生成物に `spimaster` が含まれていることを確認する．
+`csr.csv` に `spimaster` が出ることを確認する．
 
 ```bash
 ### litex_venv
@@ -112,23 +75,21 @@ csr_register,spimaster_status,0xf0003804,1,ro
 csr_register,spimaster_mosi,0xf0003808,1,rw
 csr_register,spimaster_miso,0xf000380c,1,ro
 csr_register,spimaster_cs,0xf0003810,1,rw
-csr_register,spi0_loopback,0xf0003814,1,rw
-csr_register,spi0_clk_divider,0xf0003818,1,rw
+csr_register,spimaster_loopback,0xf0003814,1,rw
+csr_register,spimaster_clk_divider,0xf0003818,1,rw
 ```
 
 FPGA に書き込む．
 
 ```bash
 ### litex_venv
-cd ${LITEX_WS_ROOT}/fpga_image/arty_a7_100
-
 python3 -m litex_boards.targets.digilent_arty \
   --variant a7-100 \
   --output-dir build \
   --load
 ```
 
-問題なければ configuration flash に bitstream を書き込んで不揮発化する．
+問題なければ configuration flash に bitstream を書き込んで不揮発化してもよい．
 
 ```bash
 ### litex_venv
@@ -136,7 +97,7 @@ openFPGALoader -b arty_a7_100t -f \
   ${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/gateware/digilent_arty.bit
 ```
 
-## 4. Zephyr overlay を生成して Pmod GYRO node を重ねる
+## 2. Zephyr overlay の生成と ACL2 ノード追加
 
 LiteX の `csr.json` から Zephyr overlay を生成し直す．
 
@@ -150,11 +111,11 @@ python3 ${LITEX_WS_ROOT}/litex_setup/litex/litex/tools/litex_json2dts_zephyr.py 
   build/csr.json
 ```
 
-生成された overlay では，`spi0` の `reg` / `reg-names` が LiteX 側の値に上書きされていることを確認する．
+`overlay.dts` で `&spi0` の `reg` / `reg-names` が LiteX の `0xf000...` 側に更新されていることを確認する．
 
 ```bash
 ### litex_venv
-$ grep -A14 '&spi0' ${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/overlay.dts
+$ grep -A10 '&spi0' ${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/overlay.dts
 &spi0 {
     reg = <0xf0003800 0x4>,
         <0xf0003804 0x4>,
@@ -168,11 +129,9 @@ $ grep -A14 '&spi0' ${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/overlay.dts
         "mosi",
 ```
 
-Pmod GYRO の child node は [overlay-pmodgyro.dts](overlay-pmodgyro.dts) に用意してある．ビルド時には LiteX 生成 overlay とこの overlay を両方指定する．
+ACL2 ノードの定義は [overlay-pmodacl2.dts](overlay-pmodacl2.dts) に用意した．
 
-## 5. `teleop_pico` の実装とビルド
-
-`teleop_pico` は SPI で GYRO を読み取り，起動時にゼロバイアスを推定して deadzone を適用し，`/turtle1/cmd_vel` 向け `geometry_msgs/msg/Twist` を rmw_zenoh 互換 keyexpr へ publish する．
+## 3. teleop_pico のビルド
 
 ```bash
 ### zephyr_venv
@@ -185,42 +144,38 @@ west build -p always \
   app/teleop_pico \
   -d ${ZEPHYR_WS_ROOT}/build/teleop_pico \
   -- \
-  -DDTC_OVERLAY_FILE="${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/overlay.dts;${ZEPHYR_WS_ROOT}/app/teleop_pico/overlay-pmodgyro.dts"
+  -DDTC_OVERLAY_FILE="${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/overlay.dts;${ZEPHYR_WS_ROOT}/app/teleop_pico/overlay-pmodacl2.dts"
 ```
 
-ビルド後の最終合成結果で，`spi0` が `okay` かつ `gyro@0` が `spi0` の子になっていることを確認する．
+ビルドされた `zephyr.dts` で `spi0` が有効で，`adxl362@0` が `spi0` の子になっていることを確認する．
 
 ```bash
 ### zephyr_venv
 $ awk '/spi0: spi@e0002000 \{/,/^[[:space:]]*\};/ { if ($0 ~ /status = "okay"/) print }' \
   ${ZEPHYR_WS_ROOT}/build/teleop_pico/zephyr/zephyr.dts
-            status = "okay";
-$ awk '/spi0: spi@e0002000 \{/,/^[[:space:]]*\};/ { if ($0 ~ /gyro@0/) print }' \
+			status = "okay";               /* in app/teleop_pico/overlay-pmodacl2.dts:2 */
+				status = "okay";                  /* in app/teleop_pico/overlay-pmodacl2.dts:8 */
+$ awk '/spi0: spi@e0002000 \{/,/^[[:space:]]*\};/ { if ($0 ~ /adxl362@0|pmod_acl2/) print }' \
   ${ZEPHYR_WS_ROOT}/build/teleop_pico/zephyr/zephyr.dts
-            pmod_gyro: gyro@0 {
+			/* node '/soc/spi@e0002000/adxl362@0' defined in app/teleop_pico/overlay-pmodacl2.dts:4 */
+			pmod_acl2: adxl362@0 {
 ```
 
-## 6. 動作確認
+## 4. 実行
 
-別の２つのターミナルで `rmw_zenoh` router と turtlesim を起動する．
+別ターミナルで router と turtlesim を起動する．
 
 ```bash
 ### ros2_env
-source /opt/ros/jazzy/setup.bash
-export RMW_IMPLEMENTATION=rmw_zenoh_cpp
-
 ros2 run rmw_zenoh_cpp rmw_zenohd
 ```
 
 ```bash
 ### ros2_env
-source /opt/ros/jazzy/setup.bash
-export RMW_IMPLEMENTATION=rmw_zenoh_cpp
-
 ros2 run turtlesim turtlesim_node
 ```
 
-LiteX の venv で serial boot する．
+ボードを起動する．
 
 ```bash
 ### litex_venv
@@ -229,23 +184,22 @@ litex_term /dev/ttyUSB1 \
   --kernel ${ZEPHYR_WS_ROOT}/build/teleop_pico/zephyr/zephyr.bin
 ```
 
-起動後，以下のようなログになれば SPI 通信と teleop 変換・publish は成功．
+ログ例:
 
 ```text
 *** Booting Zephyr OS build v4.4.0 ***
-[00:00:00.000,000] <inf> teleop_pico: WHO_AM_I=0xd3
-[00:00:00.000,000] <inf> teleop_pico: Estimating gyro bias (50 samples)... keep the board still
-[00:00:05.000,000] <inf> teleop_pico: Bias mdps x=... y=... z=...
-[00:00:05.000,000] <inf> teleop_pico: Teleop started: publishing Twist from gyro
-[00:00:05.100,000] <inf> teleop_pico: raw x=... y=... z=... mdps x=... y=... z=... -> Twist linear.x=... angular.z=...
+[00:00:00.000,000] <inf> teleop_pico: Estimating accelerometer bias (50 samples)... keep the board still
+[00:00:05.000,000] <inf> teleop_pico: Bias m/s^2 x=... y=... z=...
+[00:00:05.000,000] <inf> teleop_pico: Teleop started: publishing Twist from ACL2
+[00:00:05.100,000] <inf> teleop_pico: accel x=... y=... z=... delta x=... y=... -> Twist linear.x=... angular.z=...
 ```
 
-`WHO_AM_I` が `0xd3` にならない場合は，以下を順に確認する．
+## 5. トラブルシュート
 
-- Pmod GYRO の向きと，`--pmod-gyro` で選んだ Pmod への接続
-- `CS/MOSI/MISO/SCLK` のピン割り当て
-- `csr.csv` に LiteX 名 `spimaster` が生成されていること
-- LiteX 生成 `overlay.dts` で `&spi0` の `reg` が `0xf000...` 側に上書きされていること
-- 最終 `${ZEPHYR_WS_ROOT}/build/teleop_pico/zephyr/zephyr.dts` で `spi0` が `status = "okay"` になっていること
-- SPI mode の不一致: 現状の `litex,spi` は `CPOL=0, CPHA=0` のみ対応
-- `WHO_AM_I=0xff` や `raw=-1` が続く場合: MISO が pull-up 相当で全ビット1を読んでいる可能性が高いので，Pmod D の向き，CS 配線，MISO/MOSI の入れ違いを最優先で確認する
+- `Pmod ACL2 device is not ready`
+  - `overlay-pmodacl2.dts` がビルドに含まれているか確認
+- `Accelerometer read failed`
+  - ACL2 配線（CS/MOSI/MISO/SCLK）と Pmod 向き確認
+  - `--pmod-acl2` で指定した PMOD と実配線が一致しているか確認
+- Twist が反転する/強すぎる
+  - `src/main.c` の `LINEAR_GAIN_PER_MS2` / `ANGULAR_GAIN_PER_MS2` と軸符号を調整
