@@ -1,27 +1,32 @@
-# teleop_pico: Pmod GYRO で turtlesim teleop するための準備
+# teleop_pico: Pmod GYRO で turtlesim teleop
 
-Pmod GYRO を Arty A7 の Pmod コネクタにつなぎ，最終的には傾きや回転に応じて turtlesim の `/turtle1/cmd_vel` を publish する．まずは以下の段階で進める．
+Pmod GYRO を Arty A7 の Pmod コネクタにつなぎ，最終的には傾きや回転に応じて turtlesim の `/turtle1/cmd_vel` を publish する．
+
+次の手順で進める．
 
 1. 制御仕様を決める
 2. Pmod GYRO のチップと SPI 仕様を確認する
 3. LiteX FPGA 側に Pmod 用 SPI master を追加する
 4. Zephyr 側の devicetree/Kconfig を整える
-5. Pmod GYRO 単体読み出しアプリ `teleop_pico` を動かす
+5. プログラムを実装してビルドする
+6. 実機で動作確認する
 
-## 1. 制御仕様の初期案
+## 1. 制御仕様の検討
 
-Pmod GYRO は加速度センサではなく角速度センサなので，静的な「傾き角」を安定して得るには積分とドリフト補正が必要になる．最初のデモでは角速度をそのまま turtlesim の速度指令へ割り当てるのがよさそう．
+Pmod GYRO は加速度センサではなく角速度センサなので，静的な「傾き角」を安定して得るには積分とドリフト補正が必要になる．
+今回のデモでは角速度をそのまま turtlesim の速度指令へ割り当てることにする．
 
 - `gyro_z` を `angular.z` に割り当てる: ボードを水平面内でひねると turtle が旋回する
 - `gyro_y` を `linear.x` に割り当てる: ボードを前後方向に回すと turtle が前進/後退する
 - 起動後に数秒静止させてゼロバイアスを測る
 - deadzone と最大速度 clamp を入れて，手を離したときに turtle が暴れないようにする
 
-この節ではまだ turtlesim へ publish せず，まず Pmod GYRO の raw 値が読めるところまで進める．
+この手順では，Pmod GYRO から生データを取得し，ゼロバイアス推定・deadzone・速度クランプを適用して `Twist` の値に変換し，これを ROS 2 message として publish する．
 
 ## 2. Pmod GYRO の SPI 仕様確認
 
-Digilent Pmod GYRO は ST L3G4200D を使っている想定で進める．接続・実装前に Digilent のリファレンスと L3G4200D のデータシートで以下を確認する．
+Digilent Pmod GYRO は ST L3G4200D を使っている想定で進める．
+接続・実装前に Digilent のリファレンスと L3G4200D のデータシートで以下を確認した．
 
 - 電源は 3.3 V
 - SPI 信号は `CS`, `MOSI`, `MISO`, `SCLK`
@@ -30,7 +35,9 @@ Digilent Pmod GYRO は ST L3G4200D を使っている想定で進める．接続
 - X/Y/Z の出力レジスタは `OUT_X_L = 0x28` から 6 byte
 - 250 dps full-scale 時の感度はおおむね `8.75 mdps/LSB`
 
-注意点として，Zephyr の `litex,spi` ドライバと LiteX の `SPIMaster` は現状 `CPOL=0, CPHA=0` のみ対応している．Pmod GYRO 側が SPI mode 3 必須だった場合，`teleop_pico` の `WHO_AM_I` が `0xd3` にならない可能性がある．その場合は LiteX/Zephyr の SPI mode 対応を追加するか，mode 0 で通信できる別の SPI 実装を用意する必要がある．
+注意点として，Zephyr の `litex,spi` ドライバと LiteX の `SPIMaster` は現状 `CPOL=0, CPHA=0` のみ対応している．
+Pmod GYRO 側が SPI mode 3 必須だった場合，`teleop_pico` の `WHO_AM_I` が `0xd3` にならない可能性がある．
+結果的には不要であったが，この場合は LiteX/Zephyr の SPI mode 対応を追加するか，mode 0 で通信できる別の SPI 実装を用意する必要がある．
 
 ## 3. LiteX に Pmod 用 SPI master を追加
 
@@ -121,6 +128,14 @@ python3 -m litex_boards.targets.digilent_arty \
   --load
 ```
 
+問題なければ configuration flash に bitstream を書き込んで不揮発化する．
+
+```bash
+### litex_venv
+openFPGALoader -b arty_a7_100t -f \
+  ${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/gateware/digilent_arty.bit
+```
+
 ## 4. Zephyr overlay を生成して Pmod GYRO node を重ねる
 
 LiteX の `csr.json` から Zephyr overlay を生成し直す．
@@ -155,13 +170,15 @@ $ grep -A14 '&spi0' ${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/overlay.dts
 
 Pmod GYRO の child node は [overlay-pmodgyro.dts](overlay-pmodgyro.dts) に用意してある．ビルド時には LiteX 生成 overlay とこの overlay を両方指定する．
 
-## 5. `teleop_pico` のビルドと実行
+## 5. `teleop_pico` の実装とビルド
 
-Pmod GYRO 単体読み出しアプリはこのディレクトリに置いている．この段階ではネットワークや ROS 2 は使わず，SPI で `WHO_AM_I` と X/Y/Z の raw 値を読むだけにする．
+`teleop_pico` は SPI で GYRO を読み取り，起動時にゼロバイアスを推定して deadzone を適用し，`/turtle1/cmd_vel` 向け `geometry_msgs/msg/Twist` を rmw_zenoh 互換 keyexpr へ publish する．
 
 ```bash
 ### zephyr_venv
 cd ${ZEPHYR_WS_ROOT}
+
+export ZENOH_LOCATOR="tcp/192.168.11.105:7447"
 
 west build -p always \
   -b litex_vexriscv \
@@ -183,6 +200,26 @@ $ awk '/spi0: spi@e0002000 \{/,/^[[:space:]]*\};/ { if ($0 ~ /gyro@0/) print }' 
             pmod_gyro: gyro@0 {
 ```
 
+## 6. 動作確認
+
+別の２つのターミナルで `rmw_zenoh` router と turtlesim を起動する．
+
+```bash
+### ros2_env
+source /opt/ros/jazzy/setup.bash
+export RMW_IMPLEMENTATION=rmw_zenoh_cpp
+
+ros2 run rmw_zenoh_cpp rmw_zenohd
+```
+
+```bash
+### ros2_env
+source /opt/ros/jazzy/setup.bash
+export RMW_IMPLEMENTATION=rmw_zenoh_cpp
+
+ros2 run turtlesim turtlesim_node
+```
+
 LiteX の venv で serial boot する．
 
 ```bash
@@ -192,13 +229,15 @@ litex_term /dev/ttyUSB1 \
   --kernel ${ZEPHYR_WS_ROOT}/build/teleop_pico/zephyr/zephyr.bin
 ```
 
-起動後，以下のようなログになれば SPI 通信はまず成功．
+起動後，以下のようなログになれば SPI 通信と teleop 変換・publish は成功．
 
 ```text
 *** Booting Zephyr OS build v4.4.0 ***
 [00:00:00.000,000] <inf> teleop_pico: WHO_AM_I=0xd3
-[00:00:00.000,000] <inf> teleop_pico: Pmod GYRO sampling started
-[00:00:00.100,000] <inf> teleop_pico: raw x=... y=... z=..., mdps x=... y=... z=...
+[00:00:00.000,000] <inf> teleop_pico: Estimating gyro bias (50 samples)... keep the board still
+[00:00:05.000,000] <inf> teleop_pico: Bias mdps x=... y=... z=...
+[00:00:05.000,000] <inf> teleop_pico: Teleop started: publishing Twist from gyro
+[00:00:05.100,000] <inf> teleop_pico: raw x=... y=... z=... mdps x=... y=... z=... -> Twist linear.x=... angular.z=...
 ```
 
 `WHO_AM_I` が `0xd3` にならない場合は，以下を順に確認する．
@@ -210,5 +249,3 @@ litex_term /dev/ttyUSB1 \
 - 最終 `${ZEPHYR_WS_ROOT}/build/teleop_pico/zephyr/zephyr.dts` で `spi0` が `status = "okay"` になっていること
 - SPI mode の不一致: 現状の `litex,spi` は `CPOL=0, CPHA=0` のみ対応
 - `WHO_AM_I=0xff` や `raw=-1` が続く場合: MISO が pull-up 相当で全ビット1を読んでいる可能性が高いので，Pmod D の向き，CS 配線，MISO/MOSI の入れ違いを最優先で確認する
-
-ここまで通れば，次の段階で `teleop_pico` に bias 推定，deadzone，`geometry_msgs/msg/Twist` publish を入れて turtlesim とつなぐ．
