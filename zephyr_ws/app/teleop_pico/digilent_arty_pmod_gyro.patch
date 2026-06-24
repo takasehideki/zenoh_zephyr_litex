@@ -1,0 +1,57 @@
+diff --git a/litex_boards/targets/digilent_arty.py b/litex_boards/targets/digilent_arty.py
+index fedef148..ddfe1518 100755
+--- a/litex_boards/targets/digilent_arty.py
++++ b/litex_boards/targets/digilent_arty.py
+@@ -83,6 +83,7 @@ class BaseSoC(SoCCore):
+         with_spi_flash  = False,
+         with_buttons    = False,
+         with_pmod_gpio  = False,
++        pmod_gyro       = None,
+         with_can        = False,
+         **kwargs):
+         platform = digilent_arty.Platform(variant=variant, toolchain=toolchain)
+@@ -183,6 +184,27 @@ class BaseSoC(SoCCore):
+                 with_irq = self.irq.enabled
+             )
+ 
++        # Pmod GYRO on selected PMOD.
++        if pmod_gyro:
++            from litex.build.generic_platform import Subsignal, Pins, IOStandard
++
++            assert pmod_gyro in ["pmoda", "pmodb", "pmodc", "pmodd"]
++            platform.add_extension([
++                ("pmod_gyro_spi", 0,
++                    Subsignal("cs_n", Pins(f"{pmod_gyro}:0")),
++                    Subsignal("mosi", Pins(f"{pmod_gyro}:1")),
++                    Subsignal("miso", Pins(f"{pmod_gyro}:2")),
++                    Subsignal("clk",  Pins(f"{pmod_gyro}:3")),
++                    IOStandard("LVCMOS33"),
++                ),
++            ])
++            self.add_spi_master(
++                name="spimaster",
++                pads=platform.request("pmod_gyro_spi"),
++                data_width=8,
++                spi_clk_freq=1e6,
++            )
++
+         # CAN --------------------------------------------------------------------------------------
+         if with_can:
+             from litex.soc.cores.can.ctu_can_fd import CTUCANFD
+@@ -215,6 +237,7 @@ def main():
+ 
+     parser.add_target_argument("--with-spi-flash", action="store_true", help="Enable memory-mapped SPI flash.")
+     parser.add_target_argument("--with-pmod-gpio", action="store_true", help="Enable GPIOs through PMOD.") # FIXME: Temporary test.
++    parser.add_target_argument("--pmod-gyro", choices=["pmoda", "pmodb", "pmodc", "pmodd"], help="Enable Pmod GYRO SPI on selected PMOD.")
+     parser.add_target_argument("--with-can",       action="store_true", help="Enable CAN support (Through CTU-CAN-FD Core and SN65HVD230 'PMOD'.")
+     args = parser.parse_args()
+ 
+@@ -234,6 +257,7 @@ def main():
+         with_usb       = args.with_usb,
+         with_spi_flash = args.with_spi_flash,
+         with_pmod_gpio = args.with_pmod_gpio,
++        pmod_gyro      = args.pmod_gyro,
+         with_can       = args.with_can,
+         **parser.soc_argdict
+     )
+

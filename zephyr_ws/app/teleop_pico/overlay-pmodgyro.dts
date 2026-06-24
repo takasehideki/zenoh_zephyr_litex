@@ -1,0 +1,9 @@
+&spi0 {
+    status = "okay";
+
+    pmod_gyro: gyro@0 {
+        compatible = "st,l3g4200d";
+        reg = <0>;
+        spi-max-frequency = <1000000>;
+    };
+};

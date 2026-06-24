@@ -747,3 +747,10 @@ litex_term /dev/ttyUSB1 \
   --speed 115200 \
   --kernel ${ZEPHYR_WS_ROOT}/build/ros2_twist_pub/zephyr/zephyr.bin
 ```
+
+## 5. Pmod GYRO で turtlesim teleop するための準備
+
+Pmod GYRO で turtlesim を teleop するアプリを作ってみた:D
+詳細手順は下記のアプリ側ドキュメントを参照のこと．
+
+- [zephyr_ws/app/teleop_pico/README.md](zephyr_ws/app/teleop_pico/README.md)
