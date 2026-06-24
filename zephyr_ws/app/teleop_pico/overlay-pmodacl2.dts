@@ -1,0 +1,10 @@
+&spi0 {
+    status = "okay";
+
+    pmod_acl2: adxl362@0 {
+        compatible = "adi,adxl362";
+        reg = <0>;
+        spi-max-frequency = <1000000>;
+        status = "okay";
+    };
+};
