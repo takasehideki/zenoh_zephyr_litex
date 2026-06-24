@@ -263,11 +263,11 @@ samples/hello_world をビルドする．
 
 ```bash
 ### zephyr_venv
-cd ${ZEPHYR_WS_ROOT}/zephyr
+cd ${ZEPHYR_WS_ROOT}
 
 west build -p always \
   -b litex_vexriscv \
-  samples/hello_world \
+  zephyr/samples/hello_world \
   -d ${ZEPHYR_WS_ROOT}/build/hello_litex \
   -- \
   -DDTC_OVERLAY_FILE=${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/overlay.dts
@@ -311,11 +311,11 @@ Hello World! litex_vexriscv/litex_vexriscv
 
 ```bash
 ### zephyr_venv
-cd ${ZEPHYR_WS_ROOT}/zephyr
+cd ${ZEPHYR_WS_ROOT}
 
 west build -p always \
   -b litex_vexriscv \
-  samples/net/dhcpv4_client \
+  zephyr/samples/net/dhcpv4_client \
   -d ${ZEPHYR_WS_ROOT}/build/dhcp_litex \
   -- \
   -DDTC_OVERLAY_FILE=${LITEX_WS_ROOT}/fpga_image/arty_a7_100/build/overlay.dts
